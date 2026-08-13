@@ -11,49 +11,80 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <header class="topbar">
-      <a class="brand" href="#dashboard" aria-label="Prep Loop home"><span class="brand-mark">P</span>Prep Loop</a>
-      <nav class="tabs" aria-label="Main navigation" role="tablist">
-        <button class="tab is-active" type="button" role="tab" aria-selected="true" aria-controls="dashboard" data-tab="dashboard">Dashboard</button>
-        <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="questions" data-tab="questions">Questions</button>
-        <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="schedule" data-tab="schedule">Schedule</button>
-      </nav>
-      <label class="identity" for="identity-input"><span>You are</span><input id="identity-input" type="text" maxlength="60" placeholder="your name" autocomplete="name" /></label>
-    </header>
+    <div id="auth-screen" class="auth-screen" aria-live="polite">
+      <div class="auth-card">
+        <p class="eyebrow auth-eyebrow">Prep Loop</p>
+        <h1>Practice smarter.</h1>
+        <p class="auth-subtitle">Track interview prep and schedule mock sessions with a simple local-first login.</p>
 
-    <main class="app-shell">
-      <section id="dashboard" class="panel is-active" role="tabpanel">
-        <div class="section-intro"><p class="eyebrow">Your preparation at a glance</p><h1>Keep the loop moving.</h1><p>Review what needs attention, then make time to practice with someone.</p></div>
-        <section class="horizon-card" aria-labelledby="horizon-title"><div class="card-heading"><div><p class="eyebrow">Next seven days</p><h2 id="horizon-title">Review horizon</h2></div><span class="data-note">questions due</span></div><div id="horizon" class="horizon" aria-label="Questions due across the coming seven days"></div></section>
-        <div class="dashboard-columns">
-          <section class="card due-card" aria-labelledby="due-title"><div class="card-heading"><h2 id="due-title">Due for review <span id="due-count" class="count-badge">0</span></h2><button type="button" class="text-action" data-go="questions">Log attempt</button></div><div id="due-list" class="compact-list"></div></section>
-          <section class="card sessions-card" aria-labelledby="sessions-title"><div class="card-heading"><h2 id="sessions-title">Sessions today <span id="sessions-count" class="count-badge slate">0</span></h2><button type="button" class="text-action" data-go="schedule">View schedule</button></div><div id="sessions-list" class="compact-list"></div></section>
+        <div class="auth-switch" role="tablist" aria-label="Authentication mode">
+          <button type="button" class="auth-tab is-active" role="tab" aria-selected="true" data-auth-tab="login">Login</button>
+          <button type="button" class="auth-tab" role="tab" aria-selected="false" data-auth-tab="signup">Sign up</button>
         </div>
-      </section>
 
-      <section id="questions" class="panel" role="tabpanel" hidden>
-        <div class="section-intro"><p class="eyebrow">Spaced repetition tracker</p><h1>Log the work. Let the interval grow.</h1><p>Each attempt recalculates the next review using a simplified SM-2 schedule.</p></div>
-        <section class="card form-card" aria-labelledby="attempt-title"><div class="card-heading"><h2 id="attempt-title">Log a question attempt</h2><span class="data-note">updates matching topics</span></div>
-          <form id="question-form" class="form-grid">
-            <label>Topic<input name="topic" type="text" required maxlength="120" placeholder="e.g. Binary search" /></label>
-            <label>Difficulty<select name="difficulty"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select></label>
-            <label>Time taken <span class="unit">minutes</span><input name="timeTaken" type="number" min="0" max="9999" required placeholder="25" /></label>
-            <fieldset><legend>Outcome</legend><label class="radio-label"><input type="radio" name="outcome" value="solved" checked /> Solved</label><label class="radio-label"><input type="radio" name="outcome" value="missed" /> Missed</label></fieldset>
-            <div class="form-submit"><button class="button" type="submit">Save attempt</button></div>
-          </form>
+        <form id="login-form" class="auth-form" novalidate>
+          <label>Email<input name="email" type="email" placeholder="you@example.com" required /></label>
+          <label>Password<input name="password" type="password" placeholder="Enter your password" required /></label>
+          <button type="submit" class="button auth-button">Login</button>
+        </form>
+
+        <form id="signup-form" class="auth-form" hidden novalidate>
+          <label>Full name<input name="name" type="text" placeholder="Your name" required maxlength="60" /></label>
+          <label>Email<input name="email" type="email" placeholder="you@example.com" required /></label>
+          <label>Password<input name="password" type="password" placeholder="Create a password" required minlength="4" /></label>
+          <button type="submit" class="button auth-button">Create account</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="app-page" class="app-page" hidden>
+      <header class="topbar">
+        <a class="brand" href="#dashboard" aria-label="Prep Loop home"><span class="brand-mark">P</span>Prep Loop</a>
+        <nav class="tabs" aria-label="Main navigation" role="tablist">
+          <button class="tab is-active" type="button" role="tab" aria-selected="true" aria-controls="dashboard" data-tab="dashboard">Dashboard</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="questions" data-tab="questions">Questions</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="schedule" data-tab="schedule">Schedule</button>
+        </nav>
+        <div class="utility-actions">
+          <label class="identity" for="identity-input"><span>You are</span><input id="identity-input" type="text" maxlength="60" placeholder="your name" autocomplete="name" readonly /></label>
+          <button id="logout-button" class="logout-button" type="button">Log out</button>
+        </div>
+      </header>
+
+      <main class="app-shell">
+        <section id="dashboard" class="panel is-active" role="tabpanel">
+          <div class="section-intro"><p class="eyebrow">Your preparation at a glance</p><h1>Keep the loop moving.</h1><p>Review what needs attention, then make time to practice with someone.</p></div>
+          <section class="horizon-card" aria-labelledby="horizon-title"><div class="card-heading"><div><p class="eyebrow">Next seven days</p><h2 id="horizon-title">Review horizon</h2></div><span class="data-note">questions due</span></div><div id="horizon" class="horizon" aria-label="Questions due across the coming seven days"></div></section>
+          <div class="dashboard-columns">
+            <section class="card due-card" aria-labelledby="due-title"><div class="card-heading"><h2 id="due-title">Due for review <span id="due-count" class="count-badge">0</span></h2><button type="button" class="text-action" data-go="questions">Log attempt</button></div><div id="due-list" class="compact-list"></div></section>
+            <section class="card sessions-card" aria-labelledby="sessions-title"><div class="card-heading"><h2 id="sessions-title">Sessions today <span id="sessions-count" class="count-badge slate">0</span></h2><button type="button" class="text-action" data-go="schedule">View schedule</button></div><div id="sessions-list" class="compact-list"></div></section>
+          </div>
         </section>
-        <section class="card table-card" aria-labelledby="questions-title"><div class="card-heading"><div><p class="eyebrow">All questions</p><h2 id="questions-title">Your review queue</h2></div><span id="question-total" class="data-note">0 saved</span></div><div id="questions-table-wrap"></div></section>
-      </section>
 
-      <section id="schedule" class="panel" role="tabpanel" hidden>
-        <div class="section-intro"><p class="eyebrow">Peer mock interviews</p><h1>Put practice on the calendar.</h1><p>Offer a session or book an open slot. The scheduler prevents double-booking.</p></div>
-        <section class="offer-section"><button id="offer-toggle" class="offer-toggle" type="button" aria-expanded="false" aria-controls="offer-form">+ Offer a slot</button><form id="offer-form" class="offer-form" hidden><label>Day<select name="day"></select></label><label>Time<select name="time"></select></label><button class="button slate-button" type="submit">Offer slot</button></form></section>
-        <section class="card grid-card" aria-labelledby="grid-title"><div class="card-heading"><div><p class="eyebrow">Weekly availability</p><h2 id="grid-title">Find a practice partner</h2></div><span class="data-note">all times local</span></div><div class="schedule-scroll"><div id="schedule-grid" class="schedule-grid" aria-label="Weekly interview availability grid"></div></div></section>
-        <section class="card table-card" aria-labelledby="bookings-title"><div class="card-heading"><div><p class="eyebrow">Your sessions</p><h2 id="bookings-title">My bookings</h2></div><span id="booking-total" class="data-note">enter your name to filter</span></div><div id="bookings-table-wrap"></div></section>
-      </section>
-    </main>
+        <section id="questions" class="panel" role="tabpanel" hidden>
+          <div class="section-intro"><p class="eyebrow">Spaced repetition tracker</p><h1>Log the work. Let the interval grow.</h1><p>Each attempt recalculates the next review using a simplified SM-2 schedule.</p></div>
+          <section class="card form-card" aria-labelledby="attempt-title"><div class="card-heading"><h2 id="attempt-title">Log a question attempt</h2><span class="data-note">updates matching topics</span></div>
+            <form id="question-form" class="form-grid">
+              <label>Topic<input name="topic" type="text" required maxlength="120" placeholder="e.g. Binary search" /></label>
+              <label>Difficulty<select name="difficulty"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select></label>
+              <label>Time taken <span class="unit">minutes</span><input name="timeTaken" type="number" min="0" max="9999" required placeholder="25" /></label>
+              <fieldset><legend>Outcome</legend><label class="radio-label"><input type="radio" name="outcome" value="solved" checked /> Solved</label><label class="radio-label"><input type="radio" name="outcome" value="missed" /> Missed</label></fieldset>
+              <div class="form-submit"><button class="button" type="submit">Save attempt</button></div>
+            </form>
+          </section>
+          <section class="card table-card" aria-labelledby="questions-title"><div class="card-heading"><div><p class="eyebrow">All questions</p><h2 id="questions-title">Your review queue</h2></div><span id="question-total" class="data-note">0 saved</span></div><div id="questions-table-wrap"></div></section>
+        </section>
 
-    <dialog id="feedback-dialog" aria-labelledby="feedback-title"><form id="feedback-form" method="dialog"><div class="dialog-heading"><div><p class="eyebrow">Session reflection</p><h2 id="feedback-title">Add feedback</h2></div><button class="icon-button" type="button" id="feedback-cancel" aria-label="Close feedback dialog">×</button></div><input id="feedback-booking-id" name="bookingId" type="hidden" /><div class="sliders"><label>Communication <output for="communication">3</output><input id="communication" name="communication" type="range" min="1" max="5" value="3" /></label><label>Problem-solving <output for="problem-solving">3</output><input id="problem-solving" name="problemSolving" type="range" min="1" max="5" value="3" /></label><label>Code quality <output for="code-quality">3</output><input id="code-quality" name="codeQuality" type="range" min="1" max="5" value="3" /></label></div><label>Comment <span class="optional">optional</span><textarea name="comment" maxlength="500" placeholder="What went well? What could improve?"></textarea></label><div class="dialog-actions"><button type="button" class="button secondary-button" id="feedback-cancel-bottom">Cancel</button><button type="submit" class="button slate-button">Save feedback</button></div></form></dialog>
+        <section id="schedule" class="panel" role="tabpanel" hidden>
+          <div class="section-intro"><p class="eyebrow">Peer mock interviews</p><h1>Put practice on the calendar.</h1><p>Offer a session or book an open slot. The scheduler prevents double-booking.</p></div>
+          <section class="offer-section"><button id="offer-toggle" class="offer-toggle" type="button" aria-expanded="false" aria-controls="offer-form">+ Offer a slot</button><form id="offer-form" class="offer-form" hidden><label>Day<select name="day"></select></label><label>Time<select name="time"></select></label><button class="button slate-button" type="submit">Offer slot</button></form></section>
+          <section class="card grid-card" aria-labelledby="grid-title"><div class="card-heading"><div><p class="eyebrow">Weekly availability</p><h2 id="grid-title">Find a practice partner</h2></div><span class="data-note">all times local</span></div><div class="schedule-scroll"><div id="schedule-grid" class="schedule-grid" aria-label="Weekly interview availability grid"></div></div></section>
+          <section class="card table-card" aria-labelledby="bookings-title"><div class="card-heading"><div><p class="eyebrow">Your sessions</p><h2 id="bookings-title">My bookings</h2></div><span id="booking-total" class="data-note">enter your name to filter</span></div><div id="bookings-table-wrap"></div></section>
+        </section>
+      </main>
+
+      <dialog id="feedback-dialog" aria-labelledby="feedback-title"><form id="feedback-form" method="dialog"><div class="dialog-heading"><div><p class="eyebrow">Session reflection</p><h2 id="feedback-title">Add feedback</h2></div><button class="icon-button" type="button" id="feedback-cancel" aria-label="Close feedback dialog">×</button></div><input id="feedback-booking-id" name="bookingId" type="hidden" /><div class="sliders"><label>Communication <output for="communication">3</output><input id="communication" name="communication" type="range" min="1" max="5" value="3" /></label><label>Problem-solving <output for="problem-solving">3</output><input id="problem-solving" name="problemSolving" type="range" min="1" max="5" value="3" /></label><label>Code quality <output for="code-quality">3</output><input id="code-quality" name="codeQuality" type="range" min="1" max="5" value="3" /></label></div><label>Comment <span class="optional">optional</span><textarea name="comment" maxlength="500" placeholder="What went well? What could improve?"></textarea></label><div class="dialog-actions"><button type="button" class="button secondary-button" id="feedback-cancel-bottom">Cancel</button><button type="submit" class="button slate-button">Save feedback</button></div></form></dialog>
+    </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="storage.js"></script><script src="sm2.js"></script><script src="scheduler.js"></script><script src="app.js"></script>
