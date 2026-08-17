@@ -10,6 +10,7 @@ This version is intentionally a client-side prototype: it uses plain HTML, CSS, 
 - Repeated attempts for the same topic update one question record instead of creating duplicates.
 - Simplified SM-2 scheduling recalculates ease factor, review interval, and next review date.
 - Dashboard with a seven-day review horizon, questions due today, and today's mock sessions.
+- Live LeetCode accepted-question totals, broken down by difficulty, for a saved public username.
 - Weekly availability grid for offering and booking mock-interview slots.
 - Duplicate-offer, self-booking, already-booked, and double-booking checks.
 - Role-aware booking actions: hosts can mark a session done or reject it; requesters can cancel it.
@@ -35,6 +36,10 @@ Phase 1 uses the **You are** field as a lightweight local identity. To demonstra
 4. Switch between `Alice` and `Bob` to view the same session from each role.
 
 All data is shared only within that browser's local storage. A different browser or device starts with separate data.
+
+## LeetCode progress
+
+On the Dashboard, enter a public LeetCode username and select **Refresh card**. Prep Loop loads the live LeetCode card and heatmap through `leetcard.jacoblin.cool`, then saves only the username for the signed-in local account.
 
 ## Project structure
 
