@@ -6,7 +6,8 @@ const PrepStorage = (() => {
     bookings: 'prepLoop.bookings',
     whoami: 'prepLoop.whoami',
     users: 'prepLoop.users',
-    currentUser: 'prepLoop.currentUser'
+    currentUser: 'prepLoop.currentUser',
+    leetCodeProfiles: 'prepLoop.leetCodeProfiles'
   };
 
   function readJSON(key, fallback = []) {
@@ -59,6 +60,23 @@ const PrepStorage = (() => {
     localStorage.setItem(KEYS.currentUser, JSON.stringify(value));
   }
 
+  function getLeetCodeUsername() {
+    const account = getCurrentUser();
+    if (!account || !account.id) return '';
+    const profiles = readJSON(KEYS.leetCodeProfiles, {});
+    const savedProfile = profiles && typeof profiles === 'object' ? profiles[account.id] : '';
+    return typeof savedProfile === 'object' ? String(savedProfile.username || '') : String(savedProfile || '');
+  }
+
+  function setLeetCodeUsername(value) {
+    const account = getCurrentUser();
+    if (!account || !account.id) return;
+    const profiles = readJSON(KEYS.leetCodeProfiles, {});
+    const nextProfiles = profiles && typeof profiles === 'object' ? profiles : {};
+    nextProfiles[account.id] = String(value || '').trim();
+    writeJSON(KEYS.leetCodeProfiles, nextProfiles);
+  }
+
   function uid() {
     return (typeof crypto !== 'undefined' && crypto.randomUUID)
       ? crypto.randomUUID()
@@ -78,6 +96,8 @@ const PrepStorage = (() => {
     setUsers,
     getCurrentUser,
     setCurrentUser,
+    getLeetCodeUsername,
+    setLeetCodeUsername,
     uid
   };
 })();

@@ -4,6 +4,9 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' })[char]);
   const nameKey = name => String(name || '').trim().toLocaleLowerCase();
   const today = () => SM2.today();
+  const LEETCARD_ENDPOINT = 'https://leetcard.jacoblin.cool/';
+  let leetCodeUsername = '';
+  let leetCardVersion = '';
   let toastTimer;
 
   function showToast(message) { const toast = $('#toast'); toast.textContent = message; toast.classList.add('is-visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 3600); }
@@ -80,6 +83,8 @@
     identity.readOnly = true;
     setIdentityFromAccount();
     showAppScreen();
+    leetCodeUsername = PrepStorage.getLeetCodeUsername();
+    leetCardVersion = '';
     renderAll();
     showToast(`Welcome back, ${account.name || 'there'}!`);
   }
@@ -120,6 +125,8 @@
     identity.readOnly = true;
     setIdentityFromAccount();
     showAppScreen();
+    leetCodeUsername = '';
+    leetCardVersion = '';
     renderAll();
     showToast(`Account created for ${name}.`);
   }
@@ -132,6 +139,8 @@
     identity.readOnly = false;
     $('#login-form').reset();
     $('#signup-form').reset();
+    leetCodeUsername = '';
+    leetCardVersion = '';
     switchAuthMode('login');
     showAuthScreen();
     showToast('Logged out.');
@@ -152,6 +161,44 @@
     const sessions = user ? bookings.filter(booking => booking.status !== 'cancelled').map(booking => ({ booking, slot: slots.find(slot => slot.id === booking.slotId) })).filter(item => item.slot && item.slot.day === currentDay && (Scheduler.samePerson(item.slot.hostName, user) || Scheduler.samePerson(item.booking.requesterName, user))) : [];
     $('#sessions-count').textContent = sessions.length;
     $('#sessions-list').innerHTML = sessions.length ? sessions.sort((a, b) => Scheduler.TIMES.indexOf(a.slot.time) - Scheduler.TIMES.indexOf(b.slot.time)).map(({ booking, slot }) => { const hosting = Scheduler.samePerson(slot.hostName, user); const other = hosting ? booking.requesterName : slot.hostName; return `<div class="list-row"><div class="list-primary"><span>${escapeHtml(slot.time)} with ${escapeHtml(other)}</span><div class="list-meta">${hosting ? 'hosting' : 'attending'}</div></div><span class="status-word">${hosting ? 'host' : 'guest'}</span></div>`; }).join('') : emptyState(user ? 'No sessions today. Book one from the Schedule tab.' : 'Add your name above to see your sessions.');
+    renderLeetCodeProgress();
+  }
+
+  function renderLeetCodeProgress() {
+    const input = $('#leetcode-username');
+    const button = $('#leetcode-refresh');
+    if (!input || !button) return;
+    input.value = leetCodeUsername;
+    button.textContent = 'Refresh card';
+
+    if (!leetCodeUsername) {
+      $('#leetcode-updated').textContent = 'not connected';
+      $('#leetcode-status').innerHTML = emptyState('Enter your public LeetCode username to view its live status card.');
+      return;
+    }
+
+    const query = new URLSearchParams({ theme: 'light', font: 'Outfit', ext: 'heatmap' });
+    if (leetCardVersion) query.set('v', leetCardVersion);
+    const cardUrl = `${LEETCARD_ENDPOINT}${encodeURIComponent(leetCodeUsername)}?${query.toString()}`;
+    $('#leetcode-updated').textContent = `live card for @${leetCodeUsername}`;
+    $('#leetcode-status').innerHTML = `<img class="leetcode-image" src="${cardUrl}" alt="LeetCode progress card for @${escapeHtml(leetCodeUsername)}" loading="eager" referrerpolicy="no-referrer" />`;
+  }
+
+  function refreshLeetCodeProgress(username = $('#leetcode-username').value) {
+    const userSlug = String(username || '').trim();
+    if (!userSlug) {
+      leetCodeUsername = '';
+      leetCardVersion = '';
+      PrepStorage.setLeetCodeUsername('');
+      renderLeetCodeProgress();
+      return;
+    }
+
+    leetCodeUsername = userSlug;
+    leetCardVersion = String(Date.now());
+    PrepStorage.setLeetCodeUsername(userSlug);
+    renderLeetCodeProgress();
+    showToast('LeetCode card refreshed.');
   }
 
   function renderQuestions() {
@@ -209,6 +256,7 @@
     $('#login-form').addEventListener('submit', handleLogin);
     $('#signup-form').addEventListener('submit', handleSignup);
     $('#logout-button').addEventListener('click', handleLogout);
+    $('#leetcode-form').addEventListener('submit', event => { event.preventDefault(); refreshLeetCodeProgress(); });
 
     window.addEventListener('storage', () => {
       setIdentityFromAccount();
@@ -251,6 +299,7 @@
 
     if (currentUserAccount) {
       showAppScreen();
+      leetCodeUsername = PrepStorage.getLeetCodeUsername();
     } else {
       showAuthScreen();
       switchAuthMode('login');
