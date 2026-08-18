@@ -247,49 +247,155 @@ function handleLogout() {
   showToast("Logged out successfully.");
 }
 
-// Render 7-day review horizon bar chart
-function renderHorizon(questions) {
+// Render the active account profile and live dashboard statistics
+function renderProfileCard(questions, bookings, slots) {
+  let profileCard = document.getElementById("profile-card");
+  if (!profileCard) return;
+
+  let account = getCurrentAccount();
+  if (!account) {
+    profileCard.innerHTML = getEmptyState("Log in to view your profile.");
+    return;
+  }
+
   let todayDate = SM2.today();
-  let counts = [0, 0, 0, 0, 0, 0, 0];
+  let currentUser = account.name || account.email || "";
+  let dueCount = questions.filter(function (question) {
+    return question.nextReviewDate <= todayDate;
+  }).length;
+  let sessionCount = bookings.filter(function (booking) {
+    if (booking.status === "cancelled") return false;
+    let slot = slots.find(function (item) { return item.id === booking.slotId; });
+    return slot && (Scheduler.samePerson(slot.hostName, currentUser) || Scheduler.samePerson(booking.requesterName, currentUser));
+  }).length;
+  let connectedPlatforms = (PrepStorage.getLeetCodeUsername() ? 1 : 0) + (PrepStorage.getGfgUsername() ? 1 : 0);
+  let photo = account.avatar || account.photo || account.profilePhoto || account.avatarUrl || "";
+  let initials = String(currentUser || "?").trim().split(/\s+/).map(function (part) { return part.charAt(0); }).join("").slice(0, 2).toUpperCase();
+  let displayValue = function (keys) {
+    for (let i = 0; i < keys.length; i++) {
+      if (account[keys[i]] !== undefined && account[keys[i]] !== null && String(account[keys[i]]).trim()) {
+        return escapeHtml(account[keys[i]]);
+      }
+    }
+    return "Not provided";
+  };
+  let avatarHtml = photo
+    ? `<img src="${escapeHtml(photo)}" alt="Profile photo for ${escapeHtml(currentUser)}" onerror="this.hidden=true;this.nextElementSibling.hidden=false" /><span class="profile-initials" hidden>${escapeHtml(initials)}</span>`
+    : `<span class="profile-initials">${escapeHtml(initials)}</span>`;
 
-  for (let i = 0; i < questions.length; i++) {
-    let question = questions[i];
-    let qDate = new Date(question.nextReviewDate + "T00:00:00");
-    let tDate = new Date(todayDate + "T00:00:00");
-    let diffDays = Math.round((qDate - tDate) / (1000 * 60 * 60 * 24));
+  profileCard.innerHTML = `
+    <div class="profile-heading">
+      <div class="profile-identity">
+        <div class="profile-avatar" aria-hidden="true">${avatarHtml}</div>
+        <div>
+          <p class="eyebrow">Your profile</p>
+          <h2 id="profile-title">${escapeHtml(currentUser)}</h2>
+          <p class="profile-email">${escapeHtml(account.email || "Not provided")}</p>
+        </div>
+      </div>
+      <div class="profile-card-actions"><span class="profile-status">Active account</span><button class="text-action" type="button" data-edit-profile>Edit Profile</button></div>
+    </div>
+    <div class="profile-details">
+      <div><span class="profile-label">Course / role</span><strong>${displayValue(["course", "role", "courseRole"])}</strong></div>
+      <div><span class="profile-label">University</span><strong>${displayValue(["university", "college", "institution"])}</strong></div>
+      <div><span class="profile-label">Year</span><strong>${displayValue(["year", "studyYear", "graduationYear"])}</strong></div>
+    </div>
+    <div class="profile-stats" aria-label="Profile statistics">
+      <div><strong>${questions.length}</strong><span>Questions</span></div>
+      <div><strong>${dueCount}</strong><span>Due now</span></div>
+      <div><strong>${sessionCount}</strong><span>Sessions</span></div>
+      <div><strong>${connectedPlatforms}/2</strong><span>Platforms</span></div>
+    </div>
+  `;
+}
 
-    if (diffDays <= 0) {
-      counts[0]++;
-    } else if (diffDays < 7) {
-      counts[diffDays]++;
+function getAccountProfileValue(account, keys) {
+  for (let i = 0; i < keys.length; i++) {
+    if (account[keys[i]] !== undefined && account[keys[i]] !== null && String(account[keys[i]]).trim()) {
+      return String(account[keys[i]]);
     }
   }
+  return "";
+}
 
-  let maxCount = Math.max(...counts, 1);
-  let baseDate = new Date(todayDate + "T12:00:00");
-  let html = "";
+function getProfileAvatarMarkup(account) {
+  let name = account ? (account.name || account.email || "?") : "?";
+  let photo = account && (account.avatar || account.photo || account.profilePhoto || account.avatarUrl);
+  let initials = String(name).trim().split(/\s+/).map(function (part) { return part.charAt(0); }).join("").slice(0, 2).toUpperCase();
 
-  for (let i = 0; i < counts.length; i++) {
-    let count = counts[i];
-    let dayDate = new Date(baseDate);
-    dayDate.setDate(dayDate.getDate() + i);
+  if (photo) {
+    return `<img src="${escapeHtml(photo)}" alt="Profile photo preview" /><span class="profile-initials" hidden>${escapeHtml(initials)}</span>`;
+  }
+  return `<span class="profile-initials">${escapeHtml(initials)}</span>`;
+}
 
-    let dayLabel = i === 0 ? "Today" : Scheduler.weekdayShort(dayDate);
-    let barHeight = count > 0 ? Math.max(18, Math.round((count / maxCount) * 100)) : 5;
-    let isTodayClass = i === 0 ? "is-today" : "";
+function openProfileEditor() {
+  let account = getCurrentAccount();
+  let dialog = document.getElementById("profile-dialog");
+  let form = document.getElementById("profile-form");
+  let preview = document.getElementById("profile-photo-preview");
+  if (!account || !dialog || !form || !preview) return;
 
-    html += `
-      <div class="horizon-day ${isTodayClass}">
-        <span class="horizon-count">${count}</span>
-        <div class="horizon-bar-zone">
-          <div class="horizon-bar" style="--bar-height:${barHeight}%"></div>
-        </div>
-        <span class="horizon-label">${dayLabel}</span>
-      </div>
-    `;
+  form.elements["university"].value = getAccountProfileValue(account, ["university", "college", "institution"]);
+  form.elements["year"].value = getAccountProfileValue(account, ["year", "studyYear", "graduationYear"]);
+  form.elements["courseRole"].value = getAccountProfileValue(account, ["course", "role", "courseRole"]);
+  form.elements["photo"].value = "";
+  preview.innerHTML = getProfileAvatarMarkup(account);
+  dialog.showModal();
+}
+
+function saveProfile(event) {
+  event.preventDefault();
+
+  let account = getCurrentAccount();
+  let form = event.target;
+  if (!account) return;
+
+  let updatedAccount = {
+    ...account,
+    university: form.elements["university"].value.trim(),
+    year: form.elements["year"].value.trim(),
+    courseRole: form.elements["courseRole"].value.trim()
+  };
+  let photoFile = form.elements["photo"].files[0];
+
+  let finishSave = function (profilePhoto) {
+    if (profilePhoto !== undefined) {
+      updatedAccount.profilePhoto = profilePhoto;
+    }
+
+    let users = PrepStorage.getUsers();
+    let userIndex = users.findIndex(function (user) {
+      return user.id === account.id || user.email === account.email;
+    });
+    if (userIndex >= 0) {
+      users[userIndex] = { ...users[userIndex], ...updatedAccount };
+      PrepStorage.setUsers(users);
+    }
+    PrepStorage.setCurrentUser(updatedAccount);
+    document.getElementById("profile-dialog").close();
+    renderAll();
+    showToast("Profile updated successfully.");
+  };
+
+  if (!photoFile) {
+    finishSave();
+    return;
   }
 
-  document.getElementById("horizon").innerHTML = html;
+  if (!photoFile.type.startsWith("image/")) {
+    showToast("Please choose an image file.");
+    return;
+  }
+
+  let reader = new FileReader();
+  reader.addEventListener("load", function () {
+    finishSave(String(reader.result || ""));
+  });
+  reader.addEventListener("error", function () {
+    showToast("That photo could not be read. Please try another file.");
+  });
+  reader.readAsDataURL(photoFile);
 }
 
 // Render LeetCode card
@@ -322,6 +428,10 @@ function renderLeetCodeProgress() {
 
   let cardUrl = `${LEETCARD_ENDPOINT}${encodeURIComponent(leetCodeUsername)}?${query.toString()}`;
   updatedNote.textContent = `live card for @${leetCodeUsername}`;
+  let currentImage = statusDiv.querySelector(".leetcode-image");
+  if (currentImage && currentImage.getAttribute("src") === cardUrl) {
+    return;
+  }
   statusDiv.innerHTML = `<img class="leetcode-image" src="${cardUrl}" alt="LeetCode progress card for @${escapeHtml(leetCodeUsername)}" loading="eager" referrerpolicy="no-referrer" />`;
 }
 
@@ -652,7 +762,10 @@ function renderDashboard() {
   let bookings = PrepStorage.getBookings();
   let todayDate = SM2.today();
 
-  // 1. Due questions
+  // 1. Profile card
+  renderProfileCard(questions, bookings, slots);
+
+  // 2. Due questions
   let dueQuestions = questions.filter(function (q) {
     return q.nextReviewDate <= todayDate;
   }).sort(function (a, b) {
@@ -660,8 +773,6 @@ function renderDashboard() {
   });
 
   document.getElementById("due-count").textContent = dueQuestions.length;
-  renderHorizon(questions);
-
   let dueListHtml = "";
   if (dueQuestions.length > 0) {
     for (let i = 0; i < dueQuestions.length; i++) {
@@ -682,7 +793,7 @@ function renderDashboard() {
   }
   document.getElementById("due-list").innerHTML = dueListHtml;
 
-  // 2. Today's sessions
+  // 3. Today's sessions
   let currentUser = getCurrentUserName();
   let currentDay = Scheduler.weekdayShort();
   let todaySessions = [];
@@ -741,7 +852,7 @@ function renderDashboard() {
   }
   document.getElementById("sessions-list").innerHTML = sessionsListHtml;
 
-  // 3. Platform cards
+  // 4. Platform cards
   renderLeetCodeProgress();
   renderGfgProgress();
 }
@@ -1289,7 +1400,30 @@ function initialize() {
 
   document.getElementById("question-form").addEventListener("submit", onQuestionSubmit);
   document.getElementById("offer-form").addEventListener("submit", onOfferSubmit);
+  document.getElementById("profile-form").addEventListener("submit", saveProfile);
   document.getElementById("feedback-form").addEventListener("submit", saveFeedback);
+
+  document.getElementById("profile-card").addEventListener("click", function (event) {
+    if (event.target.closest("[data-edit-profile]")) openProfileEditor();
+  });
+
+  document.getElementById("profile-photo-input").addEventListener("change", function (event) {
+    let file = event.target.files[0];
+    let preview = document.getElementById("profile-photo-preview");
+    if (!file || !file.type.startsWith("image/")) return;
+    let reader = new FileReader();
+    reader.addEventListener("load", function () {
+      preview.innerHTML = `<img src="${escapeHtml(String(reader.result || ""))}" alt="Selected profile photo preview" />`;
+    });
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById("profile-cancel").addEventListener("click", function () {
+    document.getElementById("profile-dialog").close();
+  });
+  document.getElementById("profile-cancel-bottom").addEventListener("click", function () {
+    document.getElementById("profile-dialog").close();
+  });
 
   // Offer slot toggle button
   let offerToggle = document.getElementById("offer-toggle");
