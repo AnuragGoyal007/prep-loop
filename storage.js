@@ -8,7 +8,8 @@ const PrepStorage = (() => {
     users: 'prepLoop.users',
     currentUser: 'prepLoop.currentUser',
     leetCodeProfiles: 'prepLoop.leetCodeProfiles',
-    gfgProfiles: 'prepLoop.gfgProfiles'
+    gfgProfiles: 'prepLoop.gfgProfiles',
+    gfgCache: 'prepLoop.gfgCache'
   };
 
   function readJSON(key, fallback = []) {
@@ -95,6 +96,22 @@ const PrepStorage = (() => {
     writeJSON(KEYS.gfgProfiles, nextProfiles);
   }
 
+  function getGfgCache(username) {
+    if (!username) return null;
+    const cache = readJSON(KEYS.gfgCache, {});
+    const key = String(username).trim().toLowerCase();
+    return cache && typeof cache === 'object' ? cache[key] || null : null;
+  }
+
+  function setGfgCache(username, data) {
+    if (!username || !data) return;
+    const cache = readJSON(KEYS.gfgCache, {});
+    const nextCache = cache && typeof cache === 'object' ? cache : {};
+    const key = String(username).trim().toLowerCase();
+    nextCache[key] = data;
+    writeJSON(KEYS.gfgCache, nextCache);
+  }
+
   function uid() {
     return (typeof crypto !== 'undefined' && crypto.randomUUID)
       ? crypto.randomUUID()
@@ -118,6 +135,8 @@ const PrepStorage = (() => {
     setLeetCodeUsername,
     getGfgUsername,
     setGfgUsername,
+    getGfgCache,
+    setGfgCache,
     uid
   };
 })();
