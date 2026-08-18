@@ -7,7 +7,8 @@ const PrepStorage = (() => {
     whoami: 'prepLoop.whoami',
     users: 'prepLoop.users',
     currentUser: 'prepLoop.currentUser',
-    leetCodeProfiles: 'prepLoop.leetCodeProfiles'
+    leetCodeProfiles: 'prepLoop.leetCodeProfiles',
+    gfgProfiles: 'prepLoop.gfgProfiles'
   };
 
   function readJSON(key, fallback = []) {
@@ -77,6 +78,23 @@ const PrepStorage = (() => {
     writeJSON(KEYS.leetCodeProfiles, nextProfiles);
   }
 
+  function getGfgUsername() {
+    const account = getCurrentUser();
+    if (!account || !account.id) return '';
+    const profiles = readJSON(KEYS.gfgProfiles, {});
+    const savedProfile = profiles && typeof profiles === 'object' ? profiles[account.id] : '';
+    return typeof savedProfile === 'object' ? String(savedProfile.username || '') : String(savedProfile || '');
+  }
+
+  function setGfgUsername(value) {
+    const account = getCurrentUser();
+    if (!account || !account.id) return;
+    const profiles = readJSON(KEYS.gfgProfiles, {});
+    const nextProfiles = profiles && typeof profiles === 'object' ? profiles : {};
+    nextProfiles[account.id] = String(value || '').trim();
+    writeJSON(KEYS.gfgProfiles, nextProfiles);
+  }
+
   function uid() {
     return (typeof crypto !== 'undefined' && crypto.randomUUID)
       ? crypto.randomUUID()
@@ -98,6 +116,8 @@ const PrepStorage = (() => {
     setCurrentUser,
     getLeetCodeUsername,
     setLeetCodeUsername,
+    getGfgUsername,
+    setGfgUsername,
     uid
   };
 })();
