@@ -1,296 +1,493 @@
-/* DOM wiring only. Algorithms live in sm2.js and scheduler.js. */
-(() => {
-  const $ = selector => document.querySelector(selector);
-  const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' })[char]);
-  const nameKey = name => String(name || '').trim().toLocaleLowerCase();
-  const today = () => SM2.today();
-  const LEETCARD_ENDPOINT = 'https://leetcard.jacoblin.cool/';
-  let leetCodeUsername = '';
-  let leetCardVersion = '';
-  let gfgUsername = '';
-  let gfgCardVersion = '';
-  let toastTimer;
+// ============================================================
+// Prep Loop - Main Application Logic
+// ============================================================
 
-  function showToast(message) { const toast = $('#toast'); toast.textContent = message; toast.classList.add('is-visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 3600); }
-  function currentUser() { return $('#identity-input').value.trim(); }
-  function currentAccount() { return PrepStorage.getCurrentUser(); }
-  function state() { return { questions: PrepStorage.getQuestions(), slots: PrepStorage.getSlots(), bookings: PrepStorage.getBookings() }; }
-  function selectOptions(values) { return values.map(value => `<option value="${value}">${value}</option>`).join(''); }
-  function difficultyPill(difficulty) { return `<span class="pill ${difficulty}">${escapeHtml(difficulty)}</span>`; }
-  function emptyState(message) { return `<div class="empty-state">${message}</div>`; }
+// Global variables
+let leetCodeUsername = "";
+let leetCardVersion = "";
+let gfgUsername = "";
+let gfgCardVersion = "";
+let toastTimer = null;
+let gfgFetchSeq = 0;
 
-  function showAuthScreen() {
-    const authScreen = $('#auth-screen');
-    const appPage = $('#app-page');
-    authScreen.hidden = false;
-    appPage.hidden = true;
+const LEETCARD_ENDPOINT = "https://leetcard.jacoblin.cool/";
+const GFG_API_ENDPOINTS = [
+  "https://gfg-stats-api.vercel.app",
+  "https://gfg-stats.tashif.codes"
+];
+
+// Helper function to escape HTML special characters
+function escapeHtml(text) {
+  if (text === null || text === undefined) {
+    return "";
   }
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
-  function showAppScreen() {
-    const authScreen = $('#auth-screen');
-    const appPage = $('#app-page');
-    authScreen.hidden = true;
-    appPage.hidden = false;
-  }
+// Show a temporary popup notification message
+function showToast(message) {
+  let toast = document.getElementById("toast");
+  if (!toast) return;
 
-  function setIdentityFromAccount() {
-    const account = currentAccount();
-    const identity = $('#identity-input');
-    const name = account ? account.name : PrepStorage.getWhoami();
-    identity.value = name || '';
-    if (name) {
-      PrepStorage.setWhoami(name);
-    }
-  }
+  toast.textContent = message;
+  toast.classList.add("is-visible");
 
-  function switchAuthMode(mode) {
-    const loginForm = $('#login-form');
-    const signupForm = $('#signup-form');
-    const tabs = document.querySelectorAll('.auth-tab');
-    const showLogin = mode === 'login';
-    loginForm.hidden = !showLogin;
-    signupForm.hidden = showLogin;
-    tabs.forEach(tab => {
-      const active = tab.dataset.authTab === mode;
-      tab.classList.toggle('is-active', active);
-      tab.setAttribute('aria-selected', String(active));
-    });
-  }
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () {
+    toast.classList.remove("is-visible");
+  }, 3500);
+}
 
-  function handleLogin(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const email = String(data.get('email') || '').trim().toLowerCase();
-    const password = String(data.get('password') || '');
+// Helper to get current username
+function getCurrentUserName() {
+  let identityInput = document.getElementById("identity-input");
+  return identityInput ? identityInput.value.trim() : "";
+}
 
-    if (!email || !password) {
-      showToast('Enter both email and password.');
-      return;
-    }
+// Helper to get current user account object
+function getCurrentAccount() {
+  return PrepStorage.getCurrentUser();
+}
 
-    const users = PrepStorage.getUsers();
-    const account = users.find(user => user.email && user.email.trim().toLowerCase() === email && user.password === password);
+// Helper to create empty state box
+function getEmptyState(message) {
+  return `<div class="empty-state">${message}</div>`;
+}
 
-    if (!account) {
-      showToast('No matching account found. Try signing up first.');
-      return;
-    }
+// Helper to render difficulty badge
+function getDifficultyPill(difficulty) {
+  return `<span class="pill ${difficulty}">${escapeHtml(difficulty)}</span>`;
+}
 
-    PrepStorage.setCurrentUser(account);
-    PrepStorage.setWhoami(account.name || account.email);
-    form.reset();
-    const identity = $('#identity-input');
-    identity.value = account.name || account.email;
-    identity.readOnly = true;
-    setIdentityFromAccount();
-    showAppScreen();
-    leetCodeUsername = PrepStorage.getLeetCodeUsername();
-    leetCardVersion = '';
-    gfgUsername = PrepStorage.getGfgUsername() || leetCodeUsername;
-    gfgCardVersion = '';
-    renderAll();
-    showToast(`Welcome back, ${account.name || 'there'}!`);
-  }
+// Helper to format date as YYYY.M.D
+function formatDateDot(date) {
+  let year = date.getFullYear();
+  let month = date.getMonth() + 1;
+  let day = date.getDate();
+  return `${year}.${month}.${day}`;
+}
 
-  function handleSignup(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const name = String(data.get('name') || '').trim();
-    const email = String(data.get('email') || '').trim().toLowerCase();
-    const password = String(data.get('password') || '');
+// Screen display helpers
+function showAuthScreen() {
+  document.getElementById("auth-screen").hidden = false;
+  document.getElementById("app-page").hidden = true;
+}
 
-    if (!name || !email || !password) {
-      showToast('Please complete all signup fields.');
-      return;
-    }
+function showAppScreen() {
+  document.getElementById("auth-screen").hidden = true;
+  document.getElementById("app-page").hidden = false;
+}
 
-    if (password.length < 4) {
-      showToast('Password must be at least 4 characters long.');
-      return;
-    }
+// Set user identity field from logged-in account
+function setIdentityFromAccount() {
+  let account = getCurrentAccount();
+  let identityInput = document.getElementById("identity-input");
+  if (!identityInput) return;
 
-    const users = PrepStorage.getUsers();
-    const exists = users.some(user => user.email && user.email.trim().toLowerCase() === email);
-    if (exists) {
-      showToast('An account with that email already exists.');
-      return;
-    }
-
-    const account = { id: PrepStorage.uid(), name, email, password };
-    users.push(account);
-    PrepStorage.setUsers(users);
-    PrepStorage.setCurrentUser(account);
+  let name = account ? account.name : PrepStorage.getWhoami();
+  identityInput.value = name || "";
+  if (name) {
     PrepStorage.setWhoami(name);
-    form.reset();
-    const identity = $('#identity-input');
-    identity.value = name;
-    identity.readOnly = true;
-    setIdentityFromAccount();
-    showAppScreen();
-    leetCodeUsername = '';
-    leetCardVersion = '';
-    gfgUsername = '';
-    gfgCardVersion = '';
-    renderAll();
-    showToast(`Account created for ${name}.`);
+  }
+}
+
+// Switch between Login and Signup tabs
+function switchAuthMode(mode) {
+  let loginForm = document.getElementById("login-form");
+  let signupForm = document.getElementById("signup-form");
+  let authTabs = document.querySelectorAll(".auth-tab");
+
+  if (mode === "login") {
+    loginForm.hidden = false;
+    signupForm.hidden = true;
+  } else {
+    loginForm.hidden = true;
+    signupForm.hidden = false;
   }
 
-  function handleLogout() {
-    PrepStorage.setCurrentUser(null);
-    PrepStorage.setWhoami('');
-    const identity = $('#identity-input');
-    identity.value = '';
-    identity.readOnly = false;
-    $('#login-form').reset();
-    $('#signup-form').reset();
-    leetCodeUsername = '';
-    leetCardVersion = '';
-    gfgUsername = '';
-    gfgCardVersion = '';
-    switchAuthMode('login');
-    showAuthScreen();
-    showToast('Logged out.');
-  }
-
-  function renderHorizon(questions) {
-    const start = today(); const counts = Array(7).fill(0);
-    questions.forEach(question => { const delta = Math.round((new Date(`${question.nextReviewDate}T00:00:00`) - new Date(`${start}T00:00:00`)) / 86400000); if (delta <= 0) counts[0]++; else if (delta < 7) counts[delta]++; });
-    const max = Math.max(...counts, 1); const date = new Date(`${start}T12:00:00`);
-    $('#horizon').innerHTML = counts.map((count, index) => { const day = new Date(date); day.setDate(day.getDate() + index); const label = index === 0 ? 'Today' : Scheduler.weekdayShort(day); const height = count ? Math.max(18, Math.round((count / max) * 100)) : 5; return `<div class="horizon-day ${index === 0 ? 'is-today' : ''}"><span class="horizon-count">${count}</span><div class="horizon-bar-zone"><div class="horizon-bar" style="--bar-height:${height}%"></div></div><span class="horizon-label">${label}</span></div>`; }).join('');
-  }
-
-  const GFG_API_ENDPOINTS = [
-    'https://gfg-stats-api.vercel.app',
-    'https://gfg-stats.tashif.codes'
-  ];
-  let gfgFetchSeq = 0;
-
-  function formatDateDot(date) {
-    return `${date.getFullYear()}.${date.getMonth() + 1}.${date.getDate()}`;
-  }
-
-  async function fetchGfgEndpoint(path) {
-    for (const base of GFG_API_ENDPOINTS) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 9000);
-        const res = await fetch(`${base}${path}`, {
-          signal: controller.signal,
-          headers: { 'Accept': 'application/json' }
-        });
-        clearTimeout(timeout);
-        if (res.status === 404) {
-          return { notFound: true };
-        }
-        if (res.ok) {
-          const json = await res.json();
-          if (json && (json.status === 'success' || json.totalProblemsSolved !== undefined || json.data)) {
-            return { ok: true, data: json.data || json };
-          }
-        }
-      } catch (e) {
-        // try next endpoint
-      }
+  authTabs.forEach(function (tab) {
+    let isActive = tab.getAttribute("data-auth-tab") === mode;
+    if (isActive) {
+      tab.classList.add("is-active");
+      tab.setAttribute("aria-selected", "true");
+    } else {
+      tab.classList.remove("is-active");
+      tab.setAttribute("aria-selected", "false");
     }
+  });
+}
+
+// Handle login submit
+function handleLogin(event) {
+  event.preventDefault();
+
+  let form = event.target;
+  let email = form.elements["email"].value.trim().toLowerCase();
+  let password = form.elements["password"].value;
+
+  if (!email || !password) {
+    showToast("Please enter both email and password.");
+    return;
+  }
+
+  let users = PrepStorage.getUsers();
+  let foundUser = users.find(function (user) {
+    return user.email && user.email.trim().toLowerCase() === email && user.password === password;
+  });
+
+  if (!foundUser) {
+    showToast("Invalid credentials or no account found. Please sign up.");
+    return;
+  }
+
+  PrepStorage.setCurrentUser(foundUser);
+  PrepStorage.setWhoami(foundUser.name || foundUser.email);
+
+  form.reset();
+
+  let identityInput = document.getElementById("identity-input");
+  identityInput.value = foundUser.name || foundUser.email;
+  identityInput.readOnly = true;
+
+  setIdentityFromAccount();
+  showAppScreen();
+
+  leetCodeUsername = PrepStorage.getLeetCodeUsername();
+  leetCardVersion = "";
+  gfgUsername = PrepStorage.getGfgUsername() || leetCodeUsername;
+  gfgCardVersion = "";
+
+  renderAll();
+  showToast(`Welcome back, ${foundUser.name || "there"}!`);
+}
+
+// Handle sign up submit
+function handleSignup(event) {
+  event.preventDefault();
+
+  let form = event.target;
+  let name = form.elements["name"].value.trim();
+  let email = form.elements["email"].value.trim().toLowerCase();
+  let password = form.elements["password"].value;
+
+  if (!name || !email || !password) {
+    showToast("Please fill in all fields.");
+    return;
+  }
+
+  if (password.length < 4) {
+    showToast("Password must be at least 4 characters long.");
+    return;
+  }
+
+  let users = PrepStorage.getUsers();
+  let emailExists = users.some(function (user) {
+    return user.email && user.email.trim().toLowerCase() === email;
+  });
+
+  if (emailExists) {
+    showToast("An account with this email already exists.");
+    return;
+  }
+
+  let newUser = {
+    id: PrepStorage.uid(),
+    name: name,
+    email: email,
+    password: password
+  };
+
+  users.push(newUser);
+  PrepStorage.setUsers(users);
+  PrepStorage.setCurrentUser(newUser);
+  PrepStorage.setWhoami(name);
+
+  form.reset();
+
+  let identityInput = document.getElementById("identity-input");
+  identityInput.value = name;
+  identityInput.readOnly = true;
+
+  setIdentityFromAccount();
+  showAppScreen();
+
+  leetCodeUsername = "";
+  leetCardVersion = "";
+  gfgUsername = "";
+  gfgCardVersion = "";
+
+  renderAll();
+  showToast(`Account created for ${name}!`);
+}
+
+// Handle logout
+function handleLogout() {
+  PrepStorage.setCurrentUser(null);
+  PrepStorage.setWhoami("");
+
+  let identityInput = document.getElementById("identity-input");
+  identityInput.value = "";
+  identityInput.readOnly = false;
+
+  document.getElementById("login-form").reset();
+  document.getElementById("signup-form").reset();
+
+  leetCodeUsername = "";
+  leetCardVersion = "";
+  gfgUsername = "";
+  gfgCardVersion = "";
+
+  switchAuthMode("login");
+  showAuthScreen();
+  showToast("Logged out successfully.");
+}
+
+// Render 7-day review horizon bar chart
+function renderHorizon(questions) {
+  let todayDate = SM2.today();
+  let counts = [0, 0, 0, 0, 0, 0, 0];
+
+  for (let i = 0; i < questions.length; i++) {
+    let question = questions[i];
+    let qDate = new Date(question.nextReviewDate + "T00:00:00");
+    let tDate = new Date(todayDate + "T00:00:00");
+    let diffDays = Math.round((qDate - tDate) / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) {
+      counts[0]++;
+    } else if (diffDays < 7) {
+      counts[diffDays]++;
+    }
+  }
+
+  let maxCount = Math.max(...counts, 1);
+  let baseDate = new Date(todayDate + "T12:00:00");
+  let html = "";
+
+  for (let i = 0; i < counts.length; i++) {
+    let count = counts[i];
+    let dayDate = new Date(baseDate);
+    dayDate.setDate(dayDate.getDate() + i);
+
+    let dayLabel = i === 0 ? "Today" : Scheduler.weekdayShort(dayDate);
+    let barHeight = count > 0 ? Math.max(18, Math.round((count / maxCount) * 100)) : 5;
+    let isTodayClass = i === 0 ? "is-today" : "";
+
+    html += `
+      <div class="horizon-day ${isTodayClass}">
+        <span class="horizon-count">${count}</span>
+        <div class="horizon-bar-zone">
+          <div class="horizon-bar" style="--bar-height:${barHeight}%"></div>
+        </div>
+        <span class="horizon-label">${dayLabel}</span>
+      </div>
+    `;
+  }
+
+  document.getElementById("horizon").innerHTML = html;
+}
+
+// Render LeetCode card
+function renderLeetCodeProgress() {
+  let usernameInput = document.getElementById("leetcode-username");
+  let refreshButton = document.getElementById("leetcode-refresh");
+  let statusDiv = document.getElementById("leetcode-status");
+  let updatedNote = document.getElementById("leetcode-updated");
+
+  if (!usernameInput || !refreshButton || !statusDiv) return;
+
+  usernameInput.value = leetCodeUsername;
+  refreshButton.textContent = "Refresh card";
+
+  if (!leetCodeUsername) {
+    updatedNote.textContent = "not connected";
+    statusDiv.innerHTML = getEmptyState("Enter your public LeetCode username to view its live status card.");
+    return;
+  }
+
+  let query = new URLSearchParams({
+    theme: "light",
+    font: "Outfit",
+    ext: "heatmap"
+  });
+
+  if (leetCardVersion) {
+    query.set("v", leetCardVersion);
+  }
+
+  let cardUrl = `${LEETCARD_ENDPOINT}${encodeURIComponent(leetCodeUsername)}?${query.toString()}`;
+  updatedNote.textContent = `live card for @${leetCodeUsername}`;
+  statusDiv.innerHTML = `<img class="leetcode-image" src="${cardUrl}" alt="LeetCode progress card for @${escapeHtml(leetCodeUsername)}" loading="eager" referrerpolicy="no-referrer" />`;
+}
+
+// Refresh LeetCode card
+function refreshLeetCodeProgress(username) {
+  if (username === undefined) {
+    let input = document.getElementById("leetcode-username");
+    username = input ? input.value : "";
+  }
+
+  let cleanUsername = String(username || "").trim();
+
+  if (!cleanUsername) {
+    leetCodeUsername = "";
+    leetCardVersion = "";
+    PrepStorage.setLeetCodeUsername("");
+    renderLeetCodeProgress();
+    return;
+  }
+
+  leetCodeUsername = cleanUsername;
+  leetCardVersion = String(Date.now());
+  PrepStorage.setLeetCodeUsername(cleanUsername);
+  renderLeetCodeProgress();
+  showToast("LeetCode card refreshed.");
+}
+
+// Fetch GeeksforGeeks endpoint helper
+async function fetchGfgEndpoint(path) {
+  for (let i = 0; i < GFG_API_ENDPOINTS.length; i++) {
+    let baseUrl = GFG_API_ENDPOINTS[i];
+    try {
+      let controller = new AbortController();
+      let timeoutId = setTimeout(() => controller.abort(), 9000);
+
+      let response = await fetch(`${baseUrl}${path}`, {
+        signal: controller.signal,
+        headers: { "Accept": "application/json" }
+      });
+      clearTimeout(timeoutId);
+
+      if (response.status === 404) {
+        return { notFound: true };
+      }
+
+      if (response.ok) {
+        let result = await response.json();
+        if (result && (result.status === "success" || result.totalProblemsSolved !== undefined || result.data)) {
+          return { ok: true, data: result.data || result };
+        }
+      }
+    } catch (err) {
+      // Try next endpoint if available
+    }
+  }
+  return { ok: false };
+}
+
+// Fetch user data from GeeksforGeeks APIs
+async function fetchGfgUser(username) {
+  let userHandle = encodeURIComponent(String(username || "").trim());
+
+  let statsPromise = fetchGfgEndpoint(`/${userHandle}/stats`);
+  let heatmapPromise = fetchGfgEndpoint(`/${userHandle}/heatmap`);
+
+  let [statsRes, heatmapRes] = await Promise.all([statsPromise, heatmapPromise]);
+
+  if ((statsRes && statsRes.notFound) || (heatmapRes && heatmapRes.notFound)) {
+    return { notFound: true };
+  }
+
+  if (!statsRes?.ok && !heatmapRes?.ok) {
     return { ok: false };
   }
 
-  async function fetchGfgUser(username) {
-    const slug = encodeURIComponent(String(username || '').trim());
-    const [statsRes, heatmapRes] = await Promise.all([
-      fetchGfgEndpoint(`/${slug}/stats`),
-      fetchGfgEndpoint(`/${slug}/heatmap`)
-    ]);
+  return {
+    ok: true,
+    stats: statsRes?.ok ? statsRes.data : null,
+    heatmap: heatmapRes?.ok ? heatmapRes.data : null
+  };
+}
 
-    if (statsRes?.notFound || heatmapRes?.notFound) {
-      return { notFound: true };
+// Generate GeeksforGeeks SVG Card with 52-week heatmap
+function generateGfgHeatmapSvg(username, stats, heatmap) {
+  let easyCount = Number(stats?.byDifficulty?.easy) || 0;
+  let mediumCount = Number(stats?.byDifficulty?.medium) || 0;
+  let hardCount = Number(stats?.byDifficulty?.hard) || 0;
+  let basicCount = Number(stats?.byDifficulty?.basic) || 0;
+  let schoolCount = Number(stats?.byDifficulty?.school) || 0;
+
+  let directTotal = Number(stats?.totalSolved);
+  let calculatedTotal = easyCount + mediumCount + hardCount + basicCount + schoolCount;
+  let actualTotal = (!isNaN(directTotal) && directTotal > 0) ? directTotal : calculatedTotal;
+
+  let totalSubmissions = Number(heatmap?.totalSubmissions) || actualTotal;
+  let totalActiveDays = Number(heatmap?.totalActiveDays) || (actualTotal > 0 ? 1 : 0);
+  let currentStreak = Number(heatmap?.currentStreak) || 0;
+  let longestStreak = Number(heatmap?.longestStreak) || 0;
+
+  let now = new Date();
+  let startDate = new Date(now.getTime() - 364 * 24 * 60 * 60 * 1000);
+  let startStr = formatDateDot(startDate);
+  let endStr = formatDateDot(now);
+
+  // Map contributions by date
+  let dateMap = new Map();
+  if (heatmap && Array.isArray(heatmap.dailyContributions)) {
+    for (let i = 0; i < heatmap.dailyContributions.length; i++) {
+      let item = heatmap.dailyContributions[i];
+      if (item && item.date) {
+        dateMap.set(item.date, item);
+      }
     }
-
-    if (!statsRes?.ok && !heatmapRes?.ok) {
-      return { ok: false };
-    }
-
-    return {
-      ok: true,
-      stats: statsRes?.ok ? statsRes.data : null,
-      heatmap: heatmapRes?.ok ? heatmapRes.data : null
-    };
   }
 
-  function generateGfgHeatmapSvg(username, stats = null, heatmap = null) {
-    const easyCount = Number(stats?.byDifficulty?.easy) || 0;
-    const mediumCount = Number(stats?.byDifficulty?.medium) || 0;
-    const hardCount = Number(stats?.byDifficulty?.hard) || 0;
-    const basicCount = Number(stats?.byDifficulty?.basic) || 0;
-    const schoolCount = Number(stats?.byDifficulty?.school) || 0;
-    const directTotal = Number(stats?.totalSolved);
-    const calculatedTotal = easyCount + mediumCount + hardCount + basicCount + schoolCount;
-    const actualTotal = !isNaN(directTotal) && directTotal > 0 ? directTotal : calculatedTotal;
+  let cellW = 6.2;
+  let cellH = 6.2;
+  let gap = 2.2;
+  let startX = 24;
+  let startY = 214;
+  let levelColors = ["#f0f4f1", "#a3e6b2", "#48bb78", "#2f8d46", "#1b5e20"];
+  let rectsHtml = "";
 
-    const totalSubmissions = Number(heatmap?.totalSubmissions) || actualTotal;
-    const totalActiveDays = Number(heatmap?.totalActiveDays) || (actualTotal > 0 ? 1 : 0);
-    const currentStreak = Number(heatmap?.currentStreak) || 0;
-    const longestStreak = Number(heatmap?.longestStreak) || 0;
+  for (let col = 0; col < 52; col++) {
+    for (let row = 0; row < 7; row++) {
+      let daysAgo = (51 - col) * 7 + (6 - row);
+      let cellDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
 
-    const now = new Date();
-    const startDate = new Date(now.getTime() - 364 * 86400000);
-    const startStr = formatDateDot(startDate);
-    const endStr = formatDateDot(now);
+      let yyyy = cellDate.getFullYear();
+      let mm = String(cellDate.getMonth() + 1).padStart(2, "0");
+      let dd = String(cellDate.getDate()).padStart(2, "0");
+      let dateKey = `${yyyy}-${mm}-${dd}`;
 
-    const dateMap = new Map();
-    if (Array.isArray(heatmap?.dailyContributions)) {
-      for (const item of heatmap.dailyContributions) {
-        if (item && item.date) {
-          dateMap.set(item.date, item);
-        }
-      }
+      let entry = dateMap.get(dateKey);
+      let level = entry ? Math.max(1, Math.min(4, entry.level || entry.count || 1)) : 0;
+      let count = entry ? (entry.count || 1) : 0;
+      let isToday = (col === 51 && row === 6);
+
+      let x = (startX + col * (cellW + gap)).toFixed(1);
+      let y = (startY + row * (cellH + gap)).toFixed(1);
+      let color = levelColors[level];
+      let stroke = isToday ? 'stroke="#2f8d46" stroke-width="0.8"' : '';
+      let titleText = count > 0 ? `${dateKey}: ${count} submissions` : `${dateKey}: No submissions`;
+
+      rectsHtml += `<rect x="${x}" y="${y}" width="${cellW}" height="${cellH}" rx="1.5" fill="${color}" ${stroke}><title>${titleText}</title></rect>`;
     }
+  }
 
-    let rects = '';
-    const cellW = 6.2;
-    const cellH = 6.2;
-    const gap = 2.2;
-    const startX = 24;
-    const startY = 214;
-    const levelColors = ['#f0f4f1', '#a3e6b2', '#48bb78', '#2f8d46', '#1b5e20'];
+  let maxProblemsScale = Math.max(actualTotal * 1.25, 400);
+  let ringOffset = (238.7 * (1 - Math.min(actualTotal / maxProblemsScale, 0.96))).toFixed(1);
 
-    for (let col = 0; col < 52; col++) {
-      for (let row = 0; row < 7; row++) {
-        const daysAgo = (51 - col) * 7 + (6 - row);
-        const cellDate = new Date(now.getTime() - daysAgo * 86400000);
-        const yyyy = cellDate.getFullYear();
-        const mm = String(cellDate.getMonth() + 1).padStart(2, '0');
-        const dd = String(cellDate.getDate()).padStart(2, '0');
-        const dateKey = `${yyyy}-${mm}-${dd}`;
+  let easyWidth = actualTotal > 0 ? Math.min(334, Math.max(8, (easyCount / actualTotal) * 334)).toFixed(1) : "0";
+  let mediumWidth = actualTotal > 0 ? Math.min(334, Math.max(8, (mediumCount / actualTotal) * 334)).toFixed(1) : "0";
+  let hardWidth = actualTotal > 0 ? Math.min(334, Math.max(8, (hardCount / actualTotal) * 334)).toFixed(1) : "0";
 
-        const entry = dateMap.get(dateKey);
-        const level = entry ? Math.max(1, Math.min(4, entry.level || entry.count || 1)) : 0;
-        const count = entry ? (entry.count || 1) : 0;
-        const isToday = col === 51 && row === 6;
+  let streakLabel = "";
+  if (currentStreak > 0) {
+    streakLabel = `Streak: ${currentStreak}d (Max ${longestStreak}d)`;
+  } else if (longestStreak > 0) {
+    streakLabel = `Max Streak: ${longestStreak}d`;
+  } else {
+    streakLabel = `${totalActiveDays} Active Days`;
+  }
 
-        const x = (startX + col * (cellW + gap)).toFixed(1);
-        const y = (startY + row * (cellH + gap)).toFixed(1);
-        const color = levelColors[level];
-        const stroke = isToday ? 'stroke="#2f8d46" stroke-width="0.8"' : '';
-        const titleText = count > 0 ? `${dateKey}: ${count} submission${count === 1 ? '' : 's'}` : `${dateKey}: No submissions`;
-        rects += `<rect x="${x}" y="${y}" width="${cellW}" height="${cellH}" rx="1.5" fill="${color}" ${stroke}><title>${titleText}</title></rect>`;
-      }
-    }
-
-    const maxProblemsScale = Math.max(actualTotal * 1.25, 400);
-    const ringOffset = (238.7 * (1 - Math.min(actualTotal / maxProblemsScale, 0.96))).toFixed(1);
-
-    const easyWidth = actualTotal > 0 ? Math.min(334, Math.max(8, (easyCount / actualTotal) * 334)).toFixed(1) : '0';
-    const mediumWidth = actualTotal > 0 ? Math.min(334, Math.max(8, (mediumCount / actualTotal) * 334)).toFixed(1) : '0';
-    const hardWidth = actualTotal > 0 ? Math.min(334, Math.max(8, (hardCount / actualTotal) * 334)).toFixed(1) : '0';
-
-    const streakLabel = currentStreak > 0
-      ? `Streak: ${currentStreak}d (Max ${longestStreak}d)`
-      : (longestStreak > 0 ? `Max Streak: ${longestStreak}d` : `${totalActiveDays} Active Days`);
-
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 295" class="gfg-card-svg" role="img" aria-label="GeeksforGeeks live progress card for @${escapeHtml(username)}">
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 295" class="gfg-card-svg" role="img" aria-label="GeeksforGeeks live progress card for @${escapeHtml(username)}">
       <defs>
         <linearGradient id="gfgRing" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#2f8d46"/>
@@ -322,7 +519,7 @@
         <g transform="translate(118, 12)">
           <!-- Easy -->
           <text x="0" y="11" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Easy</text>
-          <text x="334" y="11" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${easyCount} <tspan fill="#a0aec0">${basicCount ? `(+${basicCount} basic)` : ''}</tspan></text>
+          <text x="334" y="11" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${easyCount} <tspan fill="#a0aec0">${basicCount ? `(+${basicCount} basic)` : ""}</tspan></text>
           <rect x="0" y="17" width="334" height="4" rx="2" fill="#edf2f7"/>
           <rect x="0" y="17" width="${easyWidth}" height="4" rx="2" fill="#2f8d46"/>
 
@@ -348,246 +545,854 @@
       <text x="476" y="196" text-anchor="end" fill="#2f8d46" font-family="'IBM Plex Mono', monospace" font-size="11" font-weight="600">${totalSubmissions} Submissions · ${totalActiveDays} Active Days</text>
 
       <!-- Heatmap Grid -->
-      ${rects}
+      ${rectsHtml}
 
       <!-- Dates -->
       <text x="24" y="284" fill="#718096" font-family="'IBM Plex Mono', monospace" font-size="10">${startStr}</text>
       <text x="476" y="284" text-anchor="end" fill="#718096" font-family="'IBM Plex Mono', monospace" font-size="10">${endStr}</text>
-    </svg>`;
+    </svg>
+  `;
+}
+
+// Load and render GFG card
+async function loadGfgProgress(username, forceRefresh) {
+  let userSlug = String(username || "").trim();
+  let updatedNote = document.getElementById("gfg-updated");
+  let statusDiv = document.getElementById("gfg-status");
+
+  if (!userSlug) {
+    updatedNote.textContent = "not connected";
+    statusDiv.innerHTML = getEmptyState("Enter your public GeeksforGeeks username to view its live heatmap.");
+    return;
   }
 
-  function renderDashboard() {
-    const { questions, slots, bookings } = state(); const date = today(); const due = questions.filter(question => question.nextReviewDate <= date).sort((a, b) => a.nextReviewDate.localeCompare(b.nextReviewDate));
-    $('#due-count').textContent = due.length; renderHorizon(questions);
-    $('#due-list').innerHTML = due.length ? due.map(question => `<div class="list-row"><div class="list-primary"><span>${escapeHtml(question.topic)}</span><div class="list-meta">EF ${Number(question.easeFactor).toFixed(2)} · ${escapeHtml(question.difficulty)}</div></div>${difficultyPill(question.difficulty)}</div>`).join('') : emptyState('Nothing due — you’re caught up.');
-    const user = currentUser(); const currentDay = Scheduler.weekdayShort();
-    const sessions = user ? bookings.filter(booking => booking.status !== 'cancelled').map(booking => ({ booking, slot: slots.find(slot => slot.id === booking.slotId) })).filter(item => item.slot && item.slot.day === currentDay && (Scheduler.samePerson(item.slot.hostName, user) || Scheduler.samePerson(item.booking.requesterName, user))) : [];
-    $('#sessions-count').textContent = sessions.length;
-    $('#sessions-list').innerHTML = sessions.length ? sessions.sort((a, b) => Scheduler.TIMES.indexOf(a.slot.time) - Scheduler.TIMES.indexOf(b.slot.time)).map(({ booking, slot }) => { const hosting = Scheduler.samePerson(slot.hostName, user); const other = hosting ? booking.requesterName : slot.hostName; return `<div class="list-row"><div class="list-primary"><span>${escapeHtml(slot.time)} with ${escapeHtml(other)}</span><div class="list-meta">${hosting ? 'hosting' : 'attending'}</div></div><span class="status-word">${hosting ? 'host' : 'guest'}</span></div>`; }).join('') : emptyState(user ? 'No sessions today. Book one from the Schedule tab.' : 'Add your name above to see your sessions.');
-    renderLeetCodeProgress();
-    renderGfgProgress();
+  let cachedData = !forceRefresh ? PrepStorage.getGfgCache(userSlug) : null;
+  if (cachedData && cachedData.stats) {
+    updatedNote.textContent = `live card for @${userSlug}`;
+    statusDiv.innerHTML = generateGfgHeatmapSvg(userSlug, cachedData.stats, cachedData.heatmap);
+  } else {
+    updatedNote.textContent = "syncing with GFG...";
+    statusDiv.innerHTML = `<div class="empty-state">Fetching live GeeksforGeeks data for @${escapeHtml(userSlug)}...</div>`;
   }
 
-  function renderLeetCodeProgress() {
-    const input = $('#leetcode-username');
-    const button = $('#leetcode-refresh');
-    if (!input || !button) return;
-    input.value = leetCodeUsername;
-    button.textContent = 'Refresh card';
+  let currentFetchId = ++gfgFetchSeq;
+  let result = await fetchGfgUser(userSlug);
 
-    if (!leetCodeUsername) {
-      $('#leetcode-updated').textContent = 'not connected';
-      $('#leetcode-status').innerHTML = emptyState('Enter your public LeetCode username to view its live status card.');
-      return;
-    }
-
-    const query = new URLSearchParams({ theme: 'light', font: 'Outfit', ext: 'heatmap' });
-    if (leetCardVersion) query.set('v', leetCardVersion);
-    const cardUrl = `${LEETCARD_ENDPOINT}${encodeURIComponent(leetCodeUsername)}?${query.toString()}`;
-    $('#leetcode-updated').textContent = `live card for @${leetCodeUsername}`;
-    $('#leetcode-status').innerHTML = `<img class="leetcode-image" src="${cardUrl}" alt="LeetCode progress card for @${escapeHtml(leetCodeUsername)}" loading="eager" referrerpolicy="no-referrer" />`;
+  if (currentFetchId !== gfgFetchSeq || gfgUsername !== userSlug) {
+    return;
   }
 
-  function refreshLeetCodeProgress(username = $('#leetcode-username').value) {
-    const userSlug = String(username || '').trim();
-    if (!userSlug) {
-      leetCodeUsername = '';
-      leetCardVersion = '';
-      PrepStorage.setLeetCodeUsername('');
-      renderLeetCodeProgress();
-      return;
-    }
-
-    leetCodeUsername = userSlug;
-    leetCardVersion = String(Date.now());
-    PrepStorage.setLeetCodeUsername(userSlug);
-    renderLeetCodeProgress();
-    showToast('LeetCode card refreshed.');
+  if (result.notFound) {
+    updatedNote.textContent = "user not found";
+    statusDiv.innerHTML = `<div class="empty-state">No public profile found for <strong>@${escapeHtml(userSlug)}</strong> on GeeksforGeeks.</div>`;
+    return;
   }
 
-  async function loadGfgProgress(username, force = false) {
-    const userSlug = String(username || '').trim();
-    if (!userSlug) {
-      $('#gfg-updated').textContent = 'not connected';
-      $('#gfg-status').innerHTML = emptyState('Enter your public GeeksforGeeks username to view its live heatmap.');
-      return;
-    }
-
-    const cached = !force ? PrepStorage.getGfgCache(userSlug) : null;
-    if (cached && cached.stats) {
-      $('#gfg-updated').textContent = `live card for @${userSlug}`;
-      $('#gfg-status').innerHTML = generateGfgHeatmapSvg(userSlug, cached.stats, cached.heatmap);
-    } else {
-      $('#gfg-updated').textContent = 'syncing with GFG...';
-      $('#gfg-status').innerHTML = `<div class="empty-state"><span class="loading-spinner"></span> Fetching live GeeksforGeeks data for @${escapeHtml(userSlug)}...</div>`;
-    }
-
-    const currentFetchSeq = ++gfgFetchSeq;
-    const result = await fetchGfgUser(userSlug);
-
-    if (currentFetchSeq !== gfgFetchSeq || gfgUsername !== userSlug) return;
-
-    if (result.notFound) {
-      $('#gfg-updated').textContent = 'user not found';
-      $('#gfg-status').innerHTML = `<div class="empty-state">No public profile found for <strong>@${escapeHtml(userSlug)}</strong> on GeeksforGeeks. Please verify the handle.</div>`;
-      return;
-    }
-
-    if (result.ok && result.stats) {
-      PrepStorage.setGfgCache(userSlug, { stats: result.stats, heatmap: result.heatmap, fetchedAt: Date.now() });
-      $('#gfg-updated').textContent = `live card for @${userSlug}`;
-      $('#gfg-status').innerHTML = generateGfgHeatmapSvg(userSlug, result.stats, result.heatmap);
-    } else if (!cached) {
-      // Fallback to direct SVG stats badge embed if JSON endpoints were unreachable
-      $('#gfg-updated').textContent = `live card for @${userSlug}`;
-      const imgUrl = `https://gfg-stats-api.vercel.app/${encodeURIComponent(userSlug)}/stats/svg?theme=light&v=${Date.now()}`;
-      $('#gfg-status').innerHTML = `<img class="gfg-image" src="${imgUrl}" alt="GeeksforGeeks stats for @${escapeHtml(userSlug)}" onerror="this.parentElement.innerHTML='<div class=\\'empty-state\\'>Unable to load GeeksforGeeks data right now. Please try again.</div>'" />`;
-    }
-  }
-
-  function renderGfgProgress() {
-    const input = $('#gfg-username');
-    const button = $('#gfg-refresh');
-    if (!input || !button) return;
-    input.value = gfgUsername;
-    button.textContent = 'Refresh card';
-
-    if (!gfgUsername) {
-      $('#gfg-updated').textContent = 'not connected';
-      $('#gfg-status').innerHTML = emptyState('Enter your public GeeksforGeeks username to view its live heatmap.');
-      return;
-    }
-
-    loadGfgProgress(gfgUsername, false);
-  }
-
-  function refreshGfgProgress(username = $('#gfg-username').value) {
-    const userSlug = String(username || '').trim();
-    if (!userSlug) {
-      gfgUsername = '';
-      gfgCardVersion = '';
-      PrepStorage.setGfgUsername('');
-      renderGfgProgress();
-      return;
-    }
-
-    gfgUsername = userSlug;
-    gfgCardVersion = String(Date.now());
-    PrepStorage.setGfgUsername(userSlug);
-    loadGfgProgress(userSlug, true);
-    showToast('Refreshing live GFG data...');
-  }
-
-  function renderQuestions() {
-    const questions = PrepStorage.getQuestions().sort((a, b) => a.nextReviewDate.localeCompare(b.nextReviewDate)); $('#question-total').textContent = `${questions.length} saved`;
-    $('#questions-table-wrap').innerHTML = questions.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Topic</th><th>Difficulty</th><th>Ease</th><th>Interval</th><th>Next review</th><th>Attempts</th></tr></thead><tbody>${questions.map(question => `<tr><td class="topic-cell">${escapeHtml(question.topic)}</td><td>${difficultyPill(question.difficulty)}</td><td class="mono">${Number(question.easeFactor).toFixed(2)}</td><td class="mono">${question.interval}d</td><td class="mono ${question.nextReviewDate <= today() ? 'due-date' : ''}">${escapeHtml(question.nextReviewDate)}${question.nextReviewDate <= today() ? ' · due' : ''}</td><td class="mono">${Array.isArray(question.history) ? question.history.length : 0}</td></tr>`).join('')}</tbody></table></div>` : emptyState('No questions yet. Log your first attempt above to begin the loop.');
-  }
-
-  function gridCell(slot, slotBookings, user) {
-    if (!slot) return '<div class="slot-cell" aria-label="No slot offered"></div>';
-    const booking = slotBookings.get(slot.id); const mine = user && Scheduler.samePerson(slot.hostName, user); const involvesMe = booking && user && (mine || Scheduler.samePerson(booking.requesterName, user));
-    if (!booking && !mine) return `<button class="slot-cell is-open" type="button" data-book-slot="${slot.id}" aria-label="Book ${escapeHtml(slot.hostName)}’s ${slot.day} ${slot.time} slot">book</button>`;
-    if (!booking && mine) return '<div class="slot-cell is-mine" aria-label="Your open slot">open</div>';
-    return `<div class="slot-cell is-booked" aria-label="${involvesMe ? 'Your booked session' : 'Booked by someone else'}">${involvesMe ? 'yours' : 'taken'}</div>`;
-  }
-
-  function renderSchedule() {
-    const { slots, bookings } = state(); const user = currentUser(); const slotBookings = new Map(bookings.filter(booking => booking.status !== 'cancelled').map(booking => [booking.slotId, booking]));
-    let markup = '<div class="grid-corner grid-header"></div>'; markup += Scheduler.DAYS.map(day => `<div class="grid-header">${day}</div>`).join('');
-    Scheduler.TIMES.forEach(time => { markup += `<div class="time-label">${time}</div>`; Scheduler.DAYS.forEach(day => markup += gridCell(slots.find(slot => slot.day === day && slot.time === time), slotBookings, user)); }); $('#schedule-grid').innerHTML = markup;
-    const mine = user ? bookings.map(booking => ({ booking, slot: slots.find(slot => slot.id === booking.slotId) })).filter(item => item.slot && (Scheduler.samePerson(item.slot.hostName, user) || Scheduler.samePerson(item.booking.requesterName, user))) : [];
-    $('#booking-total').textContent = user ? `${mine.length} session${mine.length === 1 ? '' : 's'}` : 'enter your name to filter';
-    $('#bookings-table-wrap').innerHTML = !user ? emptyState('Add your name in the top bar to view your bookings.') : !mine.length ? emptyState('No bookings yet. Find an open slot above to start practicing.') : `<div class="table-wrap"><table class="data-table"><thead><tr><th>Day</th><th>Time</th><th>Role</th><th>With</th><th>Status</th><th>Feedback</th></tr></thead><tbody>${mine.sort((a, b) => Scheduler.DAYS.indexOf(a.slot.day) - Scheduler.DAYS.indexOf(b.slot.day) || Scheduler.TIMES.indexOf(a.slot.time) - Scheduler.TIMES.indexOf(b.slot.time)).map(({ booking, slot }) => { const host = Scheduler.samePerson(slot.hostName, user); const other = host ? booking.requesterName : slot.hostName; let feedback = ''; if (booking.status === 'confirmed') feedback = host ? `<button class="table-button" type="button" data-done="${booking.id}">Mark done</button><button class="table-button reject-button" type="button" data-reject="${booking.id}">Reject</button>` : `<button class="table-button reject-button" type="button" data-cancel="${booking.id}">Cancel meeting</button>`; else if (booking.status === 'done' && !booking.feedback) feedback = `<button class="table-button" type="button" data-feedback="${booking.id}">Add</button>`; else if (booking.feedback) feedback = `<div class="feedback-summary"><span class="mono">${booking.feedback.communication}/${booking.feedback.problemSolving}/${booking.feedback.codeQuality}</span>${booking.feedback.comment ? `<span class="feedback-comment">${escapeHtml(booking.feedback.comment)}</span>` : ''}</div>`; return `<tr><td class="mono">${slot.day}</td><td class="mono">${slot.time}</td><td>${host ? 'Host' : 'Requester'}</td><td>${escapeHtml(other)}</td><td><span class="pill ${booking.status}">${escapeHtml(booking.status)}</span></td><td>${feedback}</td></tr>`; }).join('')}</tbody></table></div>`;
-  }
-
-  function renderAll() { renderDashboard(); renderQuestions(); renderSchedule(); }
-  function switchTab(tabName) { renderAll(); document.querySelectorAll('.tab').forEach(tab => { const active = tab.dataset.tab === tabName; tab.classList.toggle('is-active', active); tab.setAttribute('aria-selected', String(active)); }); document.querySelectorAll('.panel').forEach(panel => { const active = panel.id === tabName; panel.classList.toggle('is-active', active); panel.hidden = !active; }); }
-
-  function onQuestionSubmit(event) {
-    event.preventDefault(); const form = event.currentTarget; const values = new FormData(form); const topic = String(values.get('topic')).trim(); const correct = values.get('outcome') === 'solved'; const timeTaken = Number(values.get('timeTaken')); if (!topic || !Number.isFinite(timeTaken) || timeTaken < 0) return; const questions = PrepStorage.getQuestions(); const index = questions.findIndex(question => nameKey(question.topic) === nameKey(topic));
-    if (index >= 0) { questions[index] = SM2.recalculate(questions[index], correct, timeTaken); showToast(`Attempt added to “${topic}”.`); } else { questions.push(SM2.newQuestion({ id: PrepStorage.uid(), topic, difficulty: values.get('difficulty'), correct, timeTaken })); showToast(`“${topic}” added to your review queue.`); }
-    PrepStorage.setQuestions(questions); form.reset(); form.elements.difficulty.value = 'medium'; form.elements.outcome.value = 'solved'; renderAll();
-  }
-
-  function onOfferSubmit(event) { event.preventDefault(); const user = currentUser(); if (!user) { window.alert('Add your name in the top bar before offering a slot.'); $('#identity-input').focus(); return; } const values = new FormData(event.currentTarget); const day = values.get('day'); const time = values.get('time'); const slots = PrepStorage.getSlots(); if (Scheduler.hasOfferedSlot(slots, user, day, time)) return showToast('You already offered that day and time.'); slots.push({ id: PrepStorage.uid(), day, time, hostName: user }); PrepStorage.setSlots(slots); showToast('Your availability is now open for booking.'); event.currentTarget.reset(); renderAll(); }
-
-  function tryBooking(slotId) { const user = currentUser(); if (!user) { window.alert('Add your name in the top bar before booking a slot.'); $('#identity-input').focus(); return; } const { slots, bookings } = state(); const slot = slots.find(item => item.id === slotId); if (!slot) return showToast('That slot is no longer available.'); if (Scheduler.samePerson(slot.hostName, user)) return showToast('You cannot book your own offered slot.'); if (Scheduler.slotBooking(bookings, slotId)) return showToast('That slot has already been booked.'); if (Scheduler.personHasConflict({ slots, bookings }, user, slot.day, slot.time)) return showToast(`You already have a session at ${slot.day} ${slot.time}.`); bookings.push({ id: PrepStorage.uid(), slotId, requesterName: user, status: 'confirmed', feedback: null }); PrepStorage.setBookings(bookings); showToast(`Booked ${slot.hostName}’s ${slot.day} ${slot.time} slot.`); renderAll(); }
-
-  function markDone(id) { const bookings = PrepStorage.getBookings(); const booking = bookings.find(item => item.id === id); if (!booking) return; booking.status = 'done'; PrepStorage.setBookings(bookings); showToast('Session marked done. Add feedback when you’re ready.'); renderAll(); }
-  function rejectBooking(id) { const bookings = PrepStorage.getBookings(); const booking = bookings.find(item => item.id === id); if (!booking) return; booking.status = 'cancelled'; PrepStorage.setBookings(bookings); showToast('Booking rejected and the slot is open again.'); renderAll(); }
-  function cancelBooking(id) { const bookings = PrepStorage.getBookings(); const booking = bookings.find(item => item.id === id); if (!booking) return; booking.status = 'cancelled'; PrepStorage.setBookings(bookings); showToast('Meeting cancelled and the slot is open again.'); renderAll(); }
-  function openFeedback(id) { $('#feedback-booking-id').value = id; $('#feedback-form').reset(); document.querySelectorAll('.sliders output').forEach(output => output.value = '3'); $('#feedback-dialog').showModal(); }
-  function saveFeedback(event) { event.preventDefault(); const values = new FormData(event.currentTarget); const bookings = PrepStorage.getBookings(); const booking = bookings.find(item => item.id === values.get('bookingId')); if (!booking) return; booking.feedback = { communication: Number(values.get('communication')), problemSolving: Number(values.get('problemSolving')), codeQuality: Number(values.get('codeQuality')), comment: String(values.get('comment') || '').trim() }; PrepStorage.setBookings(bookings); $('#feedback-dialog').close(); showToast('Feedback saved.'); renderAll(); }
-
-  function initialize() {
-    const identity = $('#identity-input');
-    const currentUserAccount = currentAccount();
-    identity.readOnly = Boolean(currentUserAccount);
-    identity.value = currentUserAccount ? currentUserAccount.name : PrepStorage.getWhoami();
-    $('#offer-form select[name="day"]').innerHTML = selectOptions(Scheduler.DAYS);
-    $('#offer-form select[name="time"]').innerHTML = selectOptions(Scheduler.TIMES);
-
-    document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
-    document.querySelectorAll('[data-go]').forEach(button => button.addEventListener('click', () => switchTab(button.dataset.go)));
-    document.querySelectorAll('.auth-tab').forEach(tab => tab.addEventListener('click', () => switchAuthMode(tab.dataset.authTab)));
-    $('#login-form').addEventListener('submit', handleLogin);
-    $('#signup-form').addEventListener('submit', handleSignup);
-    $('#logout-button').addEventListener('click', handleLogout);
-    $('#leetcode-form').addEventListener('submit', event => { event.preventDefault(); refreshLeetCodeProgress(); });
-    $('#gfg-form').addEventListener('submit', event => { event.preventDefault(); refreshGfgProgress(); });
-
-    window.addEventListener('storage', () => {
-      setIdentityFromAccount();
-      renderAll();
+  if (result.ok && result.stats) {
+    PrepStorage.setGfgCache(userSlug, {
+      stats: result.stats,
+      heatmap: result.heatmap,
+      fetchedAt: Date.now()
     });
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) renderAll(); });
-    window.addEventListener('focus', renderAll);
+    updatedNote.textContent = `live card for @${userSlug}`;
+    statusDiv.innerHTML = generateGfgHeatmapSvg(userSlug, result.stats, result.heatmap);
+  } else if (!cachedData) {
+    updatedNote.textContent = `live card for @${userSlug}`;
+    let imgUrl = `https://gfg-stats-api.vercel.app/${encodeURIComponent(userSlug)}/stats/svg?theme=light&v=${Date.now()}`;
+    statusDiv.innerHTML = `<img class="gfg-image" src="${imgUrl}" alt="GeeksforGeeks stats for @${escapeHtml(userSlug)}" onerror="this.parentElement.innerHTML='<div class=\\'empty-state\\'>Unable to load GeeksforGeeks data. Please try again.</div>'" />`;
+  }
+}
 
-    identity.addEventListener('input', () => {
-      if (identity.readOnly) {
-        identity.value = currentAccount() ? currentAccount().name : PrepStorage.getWhoami();
-        return;
-      }
+// Render GFG progress from state
+function renderGfgProgress() {
+  let input = document.getElementById("gfg-username");
+  let button = document.getElementById("gfg-refresh");
 
-      const nextValue = identity.value.trim();
-      PrepStorage.setWhoami(nextValue);
-      const account = currentAccount();
-      if (account) {
-        account.name = nextValue;
-        const users = PrepStorage.getUsers();
-        const index = users.findIndex(user => user.email === account.email);
-        if (index >= 0) {
-          users[index] = { ...users[index], name: nextValue };
-          PrepStorage.setUsers(users);
-          PrepStorage.setCurrentUser({ ...account, name: nextValue });
+  if (!input || !button) return;
+  input.value = gfgUsername;
+  button.textContent = "Refresh card";
+
+  if (!gfgUsername) {
+    document.getElementById("gfg-updated").textContent = "not connected";
+    document.getElementById("gfg-status").innerHTML = getEmptyState("Enter your public GeeksforGeeks username to view its live heatmap.");
+    return;
+  }
+
+  loadGfgProgress(gfgUsername, false);
+}
+
+// Refresh GFG card
+function refreshGfgProgress(username) {
+  if (username === undefined) {
+    let input = document.getElementById("gfg-username");
+    username = input ? input.value : "";
+  }
+
+  let cleanUsername = String(username || "").trim();
+
+  if (!cleanUsername) {
+    gfgUsername = "";
+    gfgCardVersion = "";
+    PrepStorage.setGfgUsername("");
+    renderGfgProgress();
+    return;
+  }
+
+  gfgUsername = cleanUsername;
+  gfgCardVersion = String(Date.now());
+  PrepStorage.setGfgUsername(cleanUsername);
+  loadGfgProgress(cleanUsername, true);
+  showToast("Refreshing live GFG data...");
+}
+
+// Render dashboard tab contents
+function renderDashboard() {
+  let questions = PrepStorage.getQuestions();
+  let slots = PrepStorage.getSlots();
+  let bookings = PrepStorage.getBookings();
+  let todayDate = SM2.today();
+
+  // 1. Due questions
+  let dueQuestions = questions.filter(function (q) {
+    return q.nextReviewDate <= todayDate;
+  }).sort(function (a, b) {
+    return a.nextReviewDate.localeCompare(b.nextReviewDate);
+  });
+
+  document.getElementById("due-count").textContent = dueQuestions.length;
+  renderHorizon(questions);
+
+  let dueListHtml = "";
+  if (dueQuestions.length > 0) {
+    for (let i = 0; i < dueQuestions.length; i++) {
+      let item = dueQuestions[i];
+      let ef = Number(item.easeFactor).toFixed(2);
+      dueListHtml += `
+        <div class="list-row">
+          <div class="list-primary">
+            <span>${escapeHtml(item.topic)}</span>
+            <div class="list-meta">EF ${ef} · ${escapeHtml(item.difficulty)}</div>
+          </div>
+          ${getDifficultyPill(item.difficulty)}
+        </div>
+      `;
+    }
+  } else {
+    dueListHtml = getEmptyState("Nothing due — you’re caught up.");
+  }
+  document.getElementById("due-list").innerHTML = dueListHtml;
+
+  // 2. Today's sessions
+  let currentUser = getCurrentUserName();
+  let currentDay = Scheduler.weekdayShort();
+  let todaySessions = [];
+
+  if (currentUser) {
+    for (let i = 0; i < bookings.length; i++) {
+      let booking = bookings[i];
+      if (booking.status === "cancelled") continue;
+
+      let slot = slots.find(function (s) {
+        return s.id === booking.slotId;
+      });
+
+      if (slot && slot.day === currentDay) {
+        let isHost = Scheduler.samePerson(slot.hostName, currentUser);
+        let isRequester = Scheduler.samePerson(booking.requesterName, currentUser);
+
+        if (isHost || isRequester) {
+          todaySessions.push({ booking: booking, slot: slot });
         }
       }
-      renderDashboard();
-      renderSchedule();
+    }
+  }
+
+  document.getElementById("sessions-count").textContent = todaySessions.length;
+
+  let sessionsListHtml = "";
+  if (todaySessions.length > 0) {
+    todaySessions.sort(function (a, b) {
+      return Scheduler.TIMES.indexOf(a.slot.time) - Scheduler.TIMES.indexOf(b.slot.time);
     });
 
-    $('#question-form').addEventListener('submit', onQuestionSubmit);
-    $('#offer-form').addEventListener('submit', onOfferSubmit);
-    $('#offer-toggle').addEventListener('click', () => { const form = $('#offer-form'); const hidden = form.hidden; form.hidden = !hidden; $('#offer-toggle').setAttribute('aria-expanded', String(hidden)); $('#offer-toggle').textContent = hidden ? '− Hide slot form' : '+ Offer a slot'; if (hidden) form.querySelector('select').focus(); });
-    $('#schedule-grid').addEventListener('click', event => { const button = event.target.closest('[data-book-slot]'); if (button) tryBooking(button.dataset.bookSlot); });
-    $('#bookings-table-wrap').addEventListener('click', event => { const done = event.target.closest('[data-done]'); const reject = event.target.closest('[data-reject]'); const cancel = event.target.closest('[data-cancel]'); const feedback = event.target.closest('[data-feedback]'); if (done) markDone(done.dataset.done); if (reject) rejectBooking(reject.dataset.reject); if (cancel) cancelBooking(cancel.dataset.cancel); if (feedback) openFeedback(feedback.dataset.feedback); });
-    $('#feedback-form').addEventListener('submit', saveFeedback);
-    ['#feedback-cancel', '#feedback-cancel-bottom'].forEach(selector => $(selector).addEventListener('click', () => $('#feedback-dialog').close()));
-    document.querySelectorAll('.sliders input').forEach(input => input.addEventListener('input', () => input.closest('label').querySelector('output').value = input.value));
+    for (let i = 0; i < todaySessions.length; i++) {
+      let item = todaySessions[i];
+      let isHost = Scheduler.samePerson(item.slot.hostName, currentUser);
+      let otherPerson = isHost ? item.booking.requesterName : item.slot.hostName;
+      let roleText = isHost ? "hosting" : "attending";
+      let badgeText = isHost ? "host" : "guest";
 
-    if (currentUserAccount) {
-      showAppScreen();
-      leetCodeUsername = PrepStorage.getLeetCodeUsername();
-      gfgUsername = PrepStorage.getGfgUsername() || leetCodeUsername;
-      if (gfgUsername && !PrepStorage.getGfgUsername()) {
-        PrepStorage.setGfgUsername(gfgUsername);
+      sessionsListHtml += `
+        <div class="list-row">
+          <div class="list-primary">
+            <span>${escapeHtml(item.slot.time)} with ${escapeHtml(otherPerson)}</span>
+            <div class="list-meta">${roleText}</div>
+          </div>
+          <span class="status-word">${badgeText}</span>
+        </div>
+      `;
+    }
+  } else {
+    sessionsListHtml = getEmptyState(
+      currentUser
+        ? "No sessions today. Book one from the Schedule tab."
+        : "Add your name above to see your sessions."
+    );
+  }
+  document.getElementById("sessions-list").innerHTML = sessionsListHtml;
+
+  // 3. Platform cards
+  renderLeetCodeProgress();
+  renderGfgProgress();
+}
+
+// Render questions table in questions tab
+function renderQuestions() {
+  let questions = PrepStorage.getQuestions().sort(function (a, b) {
+    return a.nextReviewDate.localeCompare(b.nextReviewDate);
+  });
+
+  document.getElementById("question-total").textContent = `${questions.length} saved`;
+  let tableWrap = document.getElementById("questions-table-wrap");
+
+  if (questions.length === 0) {
+    tableWrap.innerHTML = getEmptyState("No questions yet. Log your first attempt above to begin the loop.");
+    return;
+  }
+
+  let todayDate = SM2.today();
+  let rowsHtml = "";
+
+  for (let i = 0; i < questions.length; i++) {
+    let q = questions[i];
+    let ease = Number(q.easeFactor).toFixed(2);
+    let isDue = q.nextReviewDate <= todayDate;
+    let dueClass = isDue ? "due-date" : "";
+    let dueTag = isDue ? " · due" : "";
+    let attemptsCount = Array.isArray(q.history) ? q.history.length : 0;
+
+    rowsHtml += `
+      <tr>
+        <td class="topic-cell">${escapeHtml(q.topic)}</td>
+        <td>${getDifficultyPill(q.difficulty)}</td>
+        <td class="mono">${ease}</td>
+        <td class="mono">${q.interval}d</td>
+        <td class="mono ${dueClass}">${escapeHtml(q.nextReviewDate)}${dueTag}</td>
+        <td class="mono">${attemptsCount}</td>
+      </tr>
+    `;
+  }
+
+  tableWrap.innerHTML = `
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Topic</th>
+            <th>Difficulty</th>
+            <th>Ease</th>
+            <th>Interval</th>
+            <th>Next review</th>
+            <th>Attempts</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// Handle question form submit
+function onQuestionSubmit(event) {
+  event.preventDefault();
+
+  let form = event.target;
+  let topic = form.elements["topic"].value.trim();
+  let difficulty = form.elements["difficulty"].value;
+  let timeTaken = Number(form.elements["timeTaken"].value);
+  let outcome = form.elements["outcome"].value;
+  let isCorrect = outcome === "solved";
+
+  if (!topic || !Number.isFinite(timeTaken) || timeTaken < 0) {
+    return;
+  }
+
+  let questions = PrepStorage.getQuestions();
+  let existingIndex = -1;
+
+  for (let i = 0; i < questions.length; i++) {
+    if (questions[i].topic.toLowerCase().trim() === topic.toLowerCase()) {
+      existingIndex = i;
+      break;
+    }
+  }
+
+  if (existingIndex >= 0) {
+    questions[existingIndex] = SM2.recalculate(questions[existingIndex], isCorrect, timeTaken);
+    showToast(`Attempt added to “${topic}”.`);
+  } else {
+    let newQ = SM2.newQuestion({
+      id: PrepStorage.uid(),
+      topic: topic,
+      difficulty: difficulty,
+      correct: isCorrect,
+      timeTaken: timeTaken
+    });
+    questions.push(newQ);
+    showToast(`“${topic}” added to your review queue.`);
+  }
+
+  PrepStorage.setQuestions(questions);
+  form.reset();
+  form.elements["difficulty"].value = "medium";
+  form.elements["outcome"].value = "solved";
+
+  renderAll();
+}
+
+// Build a single slot grid cell
+function getGridCell(slot, slotBookingsMap, currentUser) {
+  if (!slot) {
+    return '<div class="slot-cell" aria-label="No slot offered"></div>';
+  }
+
+  let booking = slotBookingsMap.get(slot.id);
+  let isMySlot = currentUser && Scheduler.samePerson(slot.hostName, currentUser);
+  let isInvolved = booking && currentUser && (isMySlot || Scheduler.samePerson(booking.requesterName, currentUser));
+
+  if (!booking && !isMySlot) {
+    return `<button class="slot-cell is-open" type="button" data-book-slot="${slot.id}" aria-label="Book ${escapeHtml(slot.hostName)}’s slot">book</button>`;
+  }
+
+  if (!booking && isMySlot) {
+    return '<div class="slot-cell is-mine" aria-label="Your open slot">open</div>';
+  }
+
+  return `<div class="slot-cell is-booked" aria-label="${isInvolved ? "Your booked session" : "Booked"}">${isInvolved ? "yours" : "taken"}</div>`;
+}
+
+// Render schedule tab
+function renderSchedule() {
+  let slots = PrepStorage.getSlots();
+  let bookings = PrepStorage.getBookings();
+  let currentUser = getCurrentUserName();
+
+  let activeBookings = bookings.filter(function (b) {
+    return b.status !== "cancelled";
+  });
+
+  let slotBookingsMap = new Map();
+  for (let i = 0; i < activeBookings.length; i++) {
+    slotBookingsMap.set(activeBookings[i].slotId, activeBookings[i]);
+  }
+
+  // 1. Build weekly availability grid
+  let gridHtml = '<div class="grid-corner grid-header"></div>';
+  for (let i = 0; i < Scheduler.DAYS.length; i++) {
+    gridHtml += `<div class="grid-header">${Scheduler.DAYS[i]}</div>`;
+  }
+
+  for (let t = 0; t < Scheduler.TIMES.length; t++) {
+    let time = Scheduler.TIMES[t];
+    gridHtml += `<div class="time-label">${time}</div>`;
+
+    for (let d = 0; d < Scheduler.DAYS.length; d++) {
+      let day = Scheduler.DAYS[d];
+      let matchingSlot = slots.find(function (s) {
+        return s.day === day && s.time === time;
+      });
+      gridHtml += getGridCell(matchingSlot, slotBookingsMap, currentUser);
+    }
+  }
+
+  document.getElementById("schedule-grid").innerHTML = gridHtml;
+
+  // 2. Build My Bookings table
+  let myBookings = [];
+  if (currentUser) {
+    for (let i = 0; i < bookings.length; i++) {
+      let booking = bookings[i];
+      let slot = slots.find(function (s) {
+        return s.id === booking.slotId;
+      });
+
+      if (slot) {
+        let isHost = Scheduler.samePerson(slot.hostName, currentUser);
+        let isRequester = Scheduler.samePerson(booking.requesterName, currentUser);
+
+        if (isHost || isRequester) {
+          myBookings.push({ booking: booking, slot: slot });
+        }
       }
-    } else {
-      showAuthScreen();
-      switchAuthMode('login');
+    }
+  }
+
+  let totalBadge = document.getElementById("booking-total");
+  if (currentUser) {
+    totalBadge.textContent = `${myBookings.length} session${myBookings.length === 1 ? "" : "s"}`;
+  } else {
+    totalBadge.textContent = "enter your name to filter";
+  }
+
+  let bookingsWrap = document.getElementById("bookings-table-wrap");
+  if (!currentUser) {
+    bookingsWrap.innerHTML = getEmptyState("Add your name in the top bar to view your bookings.");
+    return;
+  }
+
+  if (myBookings.length === 0) {
+    bookingsWrap.innerHTML = getEmptyState("No bookings yet. Find an open slot above to start practicing.");
+    return;
+  }
+
+  myBookings.sort(function (a, b) {
+    let dayDiff = Scheduler.DAYS.indexOf(a.slot.day) - Scheduler.DAYS.indexOf(b.slot.day);
+    if (dayDiff !== 0) return dayDiff;
+    return Scheduler.TIMES.indexOf(a.slot.time) - Scheduler.TIMES.indexOf(b.slot.time);
+  });
+
+  let bookingRowsHtml = "";
+  for (let i = 0; i < myBookings.length; i++) {
+    let item = myBookings[i];
+    let isHost = Scheduler.samePerson(item.slot.hostName, currentUser);
+    let otherPerson = isHost ? item.booking.requesterName : item.slot.hostName;
+    let roleText = isHost ? "Host" : "Requester";
+    let feedbackCol = "";
+
+    if (item.booking.status === "confirmed") {
+      if (isHost) {
+        feedbackCol = `
+          <button class="table-button" type="button" data-done="${item.booking.id}">Mark done</button>
+          <button class="table-button reject-button" type="button" data-reject="${item.booking.id}">Reject</button>
+        `;
+      } else {
+        feedbackCol = `
+          <button class="table-button reject-button" type="button" data-cancel="${item.booking.id}">Cancel meeting</button>
+        `;
+      }
+    } else if (item.booking.status === "done" && !item.booking.feedback) {
+      feedbackCol = `
+        <button class="table-button" type="button" data-feedback="${item.booking.id}">Add</button>
+      `;
+    } else if (item.booking.feedback) {
+      let fb = item.booking.feedback;
+      let commentHtml = fb.comment ? `<span class="feedback-comment">${escapeHtml(fb.comment)}</span>` : "";
+      feedbackCol = `
+        <div class="feedback-summary">
+          <span class="mono">${fb.communication}/${fb.problemSolving}/${fb.codeQuality}</span>
+          ${commentHtml}
+        </div>
+      `;
     }
 
-    renderAll();
+    bookingRowsHtml += `
+      <tr>
+        <td class="mono">${item.slot.day}</td>
+        <td class="mono">${item.slot.time}</td>
+        <td>${roleText}</td>
+        <td>${escapeHtml(otherPerson)}</td>
+        <td><span class="pill ${item.booking.status}">${escapeHtml(item.booking.status)}</span></td>
+        <td>${feedbackCol}</td>
+      </tr>
+    `;
   }
-  initialize();
-})();
+
+  bookingsWrap.innerHTML = `
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Time</th>
+            <th>Role</th>
+            <th>With</th>
+            <th>Status</th>
+            <th>Feedback</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${bookingRowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// Offer a new slot
+function onOfferSubmit(event) {
+  event.preventDefault();
+
+  let user = getCurrentUserName();
+  if (!user) {
+    alert("Please add your name in the top bar before offering a slot.");
+    document.getElementById("identity-input").focus();
+    return;
+  }
+
+  let form = event.target;
+  let day = form.elements["day"].value;
+  let time = form.elements["time"].value;
+  let slots = PrepStorage.getSlots();
+
+  if (Scheduler.hasOfferedSlot(slots, user, day, time)) {
+    showToast("You already offered that day and time.");
+    return;
+  }
+
+  let newSlot = {
+    id: PrepStorage.uid(),
+    day: day,
+    time: time,
+    hostName: user
+  };
+
+  slots.push(newSlot);
+  PrepStorage.setSlots(slots);
+  showToast("Your availability is now open for booking.");
+  form.reset();
+  renderAll();
+}
+
+// Book an open slot
+function tryBooking(slotId) {
+  let user = getCurrentUserName();
+  if (!user) {
+    alert("Please add your name in the top bar before booking a slot.");
+    document.getElementById("identity-input").focus();
+    return;
+  }
+
+  let slots = PrepStorage.getSlots();
+  let bookings = PrepStorage.getBookings();
+  let targetSlot = slots.find(function (s) {
+    return s.id === slotId;
+  });
+
+  if (!targetSlot) {
+    showToast("That slot is no longer available.");
+    return;
+  }
+
+  if (Scheduler.samePerson(targetSlot.hostName, user)) {
+    showToast("You cannot book your own offered slot.");
+    return;
+  }
+
+  if (Scheduler.slotBooking(bookings, slotId)) {
+    showToast("That slot has already been booked.");
+    return;
+  }
+
+  if (Scheduler.personHasConflict({ slots: slots, bookings: bookings }, user, targetSlot.day, targetSlot.time)) {
+    showToast(`You already have a session at ${targetSlot.day} ${targetSlot.time}.`);
+    return;
+  }
+
+  let newBooking = {
+    id: PrepStorage.uid(),
+    slotId: slotId,
+    requesterName: user,
+    status: "confirmed",
+    feedback: null
+  };
+
+  bookings.push(newBooking);
+  PrepStorage.setBookings(bookings);
+  showToast(`Booked ${targetSlot.hostName}’s ${targetSlot.day} ${targetSlot.time} slot.`);
+  renderAll();
+}
+
+// Status actions for bookings
+function markDone(id) {
+  let bookings = PrepStorage.getBookings();
+  let target = bookings.find(function (b) { return b.id === id; });
+  if (!target) return;
+
+  target.status = "done";
+  PrepStorage.setBookings(bookings);
+  showToast("Session marked done. Add feedback when ready.");
+  renderAll();
+}
+
+function rejectBooking(id) {
+  let bookings = PrepStorage.getBookings();
+  let target = bookings.find(function (b) { return b.id === id; });
+  if (!target) return;
+
+  target.status = "cancelled";
+  PrepStorage.setBookings(bookings);
+  showToast("Booking rejected and slot is open again.");
+  renderAll();
+}
+
+function cancelBooking(id) {
+  let bookings = PrepStorage.getBookings();
+  let target = bookings.find(function (b) { return b.id === id; });
+  if (!target) return;
+
+  target.status = "cancelled";
+  PrepStorage.setBookings(bookings);
+  showToast("Meeting cancelled and slot is open again.");
+  renderAll();
+}
+
+// Feedback Dialog helpers
+function openFeedback(id) {
+  let bookingIdInput = document.getElementById("feedback-booking-id");
+  let feedbackForm = document.getElementById("feedback-form");
+  let dialog = document.getElementById("feedback-dialog");
+
+  if (!dialog) return;
+
+  bookingIdInput.value = id;
+  feedbackForm.reset();
+
+  let outputs = document.querySelectorAll(".sliders output");
+  outputs.forEach(function (output) {
+    output.value = "3";
+  });
+
+  dialog.showModal();
+}
+
+function saveFeedback(event) {
+  event.preventDefault();
+
+  let form = event.target;
+  let bookingId = form.elements["bookingId"].value;
+  let communication = Number(form.elements["communication"].value);
+  let problemSolving = Number(form.elements["problemSolving"].value);
+  let codeQuality = Number(form.elements["codeQuality"].value);
+  let comment = String(form.elements["comment"].value || "").trim();
+
+  let bookings = PrepStorage.getBookings();
+  let target = bookings.find(function (b) { return b.id === bookingId; });
+  if (!target) return;
+
+  target.feedback = {
+    communication: communication,
+    problemSolving: problemSolving,
+    codeQuality: codeQuality,
+    comment: comment
+  };
+
+  PrepStorage.setBookings(bookings);
+  document.getElementById("feedback-dialog").close();
+  showToast("Feedback saved successfully.");
+  renderAll();
+}
+
+// Switch main navigation tabs
+function switchTab(tabName) {
+  renderAll();
+
+  let tabs = document.querySelectorAll(".tab");
+  tabs.forEach(function (tab) {
+    let isActive = tab.getAttribute("data-tab") === tabName;
+    if (isActive) {
+      tab.classList.add("is-active");
+      tab.setAttribute("aria-selected", "true");
+    } else {
+      tab.classList.remove("is-active");
+      tab.setAttribute("aria-selected", "false");
+    }
+  });
+
+  let panels = document.querySelectorAll(".panel");
+  panels.forEach(function (panel) {
+    let isActive = panel.id === tabName;
+    if (isActive) {
+      panel.classList.add("is-active");
+      panel.hidden = false;
+    } else {
+      panel.classList.remove("is-active");
+      panel.hidden = true;
+    }
+  });
+}
+
+// Render all tabs
+function renderAll() {
+  renderDashboard();
+  renderQuestions();
+  renderSchedule();
+}
+
+// Initialize page and attach event listeners
+function initialize() {
+  let identityInput = document.getElementById("identity-input");
+  let currentUserAccount = getCurrentAccount();
+
+  identityInput.readOnly = Boolean(currentUserAccount);
+  identityInput.value = currentUserAccount ? currentUserAccount.name : PrepStorage.getWhoami();
+
+  // Populate day and time dropdowns in offer form
+  let daySelect = document.querySelector('#offer-form select[name="day"]');
+  let timeSelect = document.querySelector('#offer-form select[name="time"]');
+
+  if (daySelect) {
+    let dayOptionsHtml = "";
+    for (let i = 0; i < Scheduler.DAYS.length; i++) {
+      dayOptionsHtml += `<option value="${Scheduler.DAYS[i]}">${Scheduler.DAYS[i]}</option>`;
+    }
+    daySelect.innerHTML = dayOptionsHtml;
+  }
+
+  if (timeSelect) {
+    let timeOptionsHtml = "";
+    for (let i = 0; i < Scheduler.TIMES.length; i++) {
+      timeOptionsHtml += `<option value="${Scheduler.TIMES[i]}">${Scheduler.TIMES[i]}</option>`;
+    }
+    timeSelect.innerHTML = timeOptionsHtml;
+  }
+
+  // Navigation tab buttons
+  let navTabs = document.querySelectorAll(".tab");
+  navTabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      switchTab(tab.getAttribute("data-tab"));
+    });
+  });
+
+  // Quick action jump buttons (data-go="...")
+  let goButtons = document.querySelectorAll("[data-go]");
+  goButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      switchTab(btn.getAttribute("data-go"));
+    });
+  });
+
+  // Auth switch buttons (Login / Sign up)
+  let authTabs = document.querySelectorAll(".auth-tab");
+  authTabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      switchAuthMode(tab.getAttribute("data-auth-tab"));
+    });
+  });
+
+  // Forms
+  document.getElementById("login-form").addEventListener("submit", handleLogin);
+  document.getElementById("signup-form").addEventListener("submit", handleSignup);
+  document.getElementById("logout-button").addEventListener("click", handleLogout);
+
+  document.getElementById("leetcode-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    refreshLeetCodeProgress();
+  });
+
+  document.getElementById("gfg-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    refreshGfgProgress();
+  });
+
+  document.getElementById("question-form").addEventListener("submit", onQuestionSubmit);
+  document.getElementById("offer-form").addEventListener("submit", onOfferSubmit);
+  document.getElementById("feedback-form").addEventListener("submit", saveFeedback);
+
+  // Offer slot toggle button
+  let offerToggle = document.getElementById("offer-toggle");
+  offerToggle.addEventListener("click", function () {
+    let form = document.getElementById("offer-form");
+    let isHidden = form.hidden;
+    form.hidden = !isHidden;
+    offerToggle.setAttribute("aria-expanded", String(isHidden));
+    offerToggle.textContent = isHidden ? "− Hide slot form" : "+ Offer a slot";
+    if (isHidden) {
+      form.querySelector("select").focus();
+    }
+  });
+
+  // Schedule grid booking button delegation
+  document.getElementById("schedule-grid").addEventListener("click", function (event) {
+    let bookBtn = event.target.closest("[data-book-slot]");
+    if (bookBtn) {
+      tryBooking(bookBtn.getAttribute("data-book-slot"));
+    }
+  });
+
+  // Bookings table action buttons delegation
+  document.getElementById("bookings-table-wrap").addEventListener("click", function (event) {
+    let doneBtn = event.target.closest("[data-done]");
+    let rejectBtn = event.target.closest("[data-reject]");
+    let cancelBtn = event.target.closest("[data-cancel]");
+    let feedbackBtn = event.target.closest("[data-feedback]");
+
+    if (doneBtn) markDone(doneBtn.getAttribute("data-done"));
+    if (rejectBtn) rejectBooking(rejectBtn.getAttribute("data-reject"));
+    if (cancelBtn) cancelBooking(cancelBtn.getAttribute("data-cancel"));
+    if (feedbackBtn) openFeedback(feedbackBtn.getAttribute("data-feedback"));
+  });
+
+  // Close feedback dialog buttons
+  document.getElementById("feedback-cancel").addEventListener("click", function () {
+    document.getElementById("feedback-dialog").close();
+  });
+  document.getElementById("feedback-cancel-bottom").addEventListener("click", function () {
+    document.getElementById("feedback-dialog").close();
+  });
+
+  // Slider outputs in feedback modal
+  let sliderInputs = document.querySelectorAll(".sliders input");
+  sliderInputs.forEach(function (slider) {
+    slider.addEventListener("input", function () {
+      let output = slider.closest("label").querySelector("output");
+      if (output) output.value = slider.value;
+    });
+  });
+
+  // Identity input manual change (for guest mode)
+  identityInput.addEventListener("input", function () {
+    if (identityInput.readOnly) {
+      identityInput.value = getCurrentAccount() ? getCurrentAccount().name : PrepStorage.getWhoami();
+      return;
+    }
+
+    let nextValue = identityInput.value.trim();
+    PrepStorage.setWhoami(nextValue);
+
+    let account = getCurrentAccount();
+    if (account) {
+      account.name = nextValue;
+      let users = PrepStorage.getUsers();
+      let index = users.findIndex(function (u) { return u.email === account.email; });
+      if (index >= 0) {
+        users[index] = { ...users[index], name: nextValue };
+        PrepStorage.setUsers(users);
+        PrepStorage.setCurrentUser({ ...account, name: nextValue });
+      }
+    }
+
+    renderDashboard();
+    renderSchedule();
+  });
+
+  // Window events
+  window.addEventListener("storage", function () {
+    setIdentityFromAccount();
+    renderAll();
+  });
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) renderAll();
+  });
+  window.addEventListener("focus", renderAll);
+
+  // Initial user setup
+  if (currentUserAccount) {
+    showAppScreen();
+    leetCodeUsername = PrepStorage.getLeetCodeUsername();
+    gfgUsername = PrepStorage.getGfgUsername() || leetCodeUsername;
+    if (gfgUsername && !PrepStorage.getGfgUsername()) {
+      PrepStorage.setGfgUsername(gfgUsername);
+    }
+  } else {
+    showAuthScreen();
+    switchAuthMode("login");
+  }
+
+  renderAll();
+}
+
+// Start application
+initialize();
