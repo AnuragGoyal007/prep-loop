@@ -161,34 +161,92 @@
     $('#horizon').innerHTML = counts.map((count, index) => { const day = new Date(date); day.setDate(day.getDate() + index); const label = index === 0 ? 'Today' : Scheduler.weekdayShort(day); const height = count ? Math.max(18, Math.round((count / max) * 100)) : 5; return `<div class="horizon-day ${index === 0 ? 'is-today' : ''}"><span class="horizon-count">${count}</span><div class="horizon-bar-zone"><div class="horizon-bar" style="--bar-height:${height}%"></div></div><span class="horizon-label">${label}</span></div>`; }).join('');
   }
 
-  function hashString(str) {
-    let hash = 0;
-    const cleanStr = String(str || '').toLowerCase().trim();
-    for (let i = 0; i < cleanStr.length; i++) {
-      hash = ((hash << 5) - hash) + cleanStr.charCodeAt(i);
-      hash |= 0;
-    }
-    return Math.abs(hash);
-  }
+  const GFG_API_ENDPOINTS = [
+    'https://gfg-stats-api.vercel.app',
+    'https://gfg-stats.tashif.codes'
+  ];
+  let gfgFetchSeq = 0;
 
   function formatDateDot(date) {
     return `${date.getFullYear()}.${date.getMonth() + 1}.${date.getDate()}`;
   }
 
-  function generateGfgHeatmapSvg(username) {
-    const seed = hashString(username);
-    const totalSolved = 240 + (seed % 390);
-    const easyCount = Math.floor(totalSolved * 0.42) + 20;
-    const mediumCount = Math.floor(totalSolved * 0.40) + 15;
-    const hardCount = Math.max(12, totalSolved - easyCount - mediumCount);
-    const actualTotal = easyCount + mediumCount + hardCount;
-    const codingScore = actualTotal * 4 + (seed % 190);
-    const globalRank = '#' + ((seed % 180000) + 12400);
+  async function fetchGfgEndpoint(path) {
+    for (const base of GFG_API_ENDPOINTS) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 9000);
+        const res = await fetch(`${base}${path}`, {
+          signal: controller.signal,
+          headers: { 'Accept': 'application/json' }
+        });
+        clearTimeout(timeout);
+        if (res.status === 404) {
+          return { notFound: true };
+        }
+        if (res.ok) {
+          const json = await res.json();
+          if (json && (json.status === 'success' || json.totalProblemsSolved !== undefined || json.data)) {
+            return { ok: true, data: json.data || json };
+          }
+        }
+      } catch (e) {
+        // try next endpoint
+      }
+    }
+    return { ok: false };
+  }
+
+  async function fetchGfgUser(username) {
+    const slug = encodeURIComponent(String(username || '').trim());
+    const [statsRes, heatmapRes] = await Promise.all([
+      fetchGfgEndpoint(`/${slug}/stats`),
+      fetchGfgEndpoint(`/${slug}/heatmap`)
+    ]);
+
+    if (statsRes?.notFound || heatmapRes?.notFound) {
+      return { notFound: true };
+    }
+
+    if (!statsRes?.ok && !heatmapRes?.ok) {
+      return { ok: false };
+    }
+
+    return {
+      ok: true,
+      stats: statsRes?.ok ? statsRes.data : null,
+      heatmap: heatmapRes?.ok ? heatmapRes.data : null
+    };
+  }
+
+  function generateGfgHeatmapSvg(username, stats = null, heatmap = null) {
+    const easyCount = Number(stats?.byDifficulty?.easy) || 0;
+    const mediumCount = Number(stats?.byDifficulty?.medium) || 0;
+    const hardCount = Number(stats?.byDifficulty?.hard) || 0;
+    const basicCount = Number(stats?.byDifficulty?.basic) || 0;
+    const schoolCount = Number(stats?.byDifficulty?.school) || 0;
+    const directTotal = Number(stats?.totalSolved);
+    const calculatedTotal = easyCount + mediumCount + hardCount + basicCount + schoolCount;
+    const actualTotal = !isNaN(directTotal) && directTotal > 0 ? directTotal : calculatedTotal;
+
+    const totalSubmissions = Number(heatmap?.totalSubmissions) || actualTotal;
+    const totalActiveDays = Number(heatmap?.totalActiveDays) || (actualTotal > 0 ? 1 : 0);
+    const currentStreak = Number(heatmap?.currentStreak) || 0;
+    const longestStreak = Number(heatmap?.longestStreak) || 0;
 
     const now = new Date();
     const startDate = new Date(now.getTime() - 364 * 86400000);
     const startStr = formatDateDot(startDate);
     const endStr = formatDateDot(now);
+
+    const dateMap = new Map();
+    if (Array.isArray(heatmap?.dailyContributions)) {
+      for (const item of heatmap.dailyContributions) {
+        if (item && item.date) {
+          dateMap.set(item.date, item);
+        }
+      }
+    }
 
     let rects = '';
     const cellW = 6.2;
@@ -199,28 +257,40 @@
     const levelColors = ['#f0f4f1', '#a3e6b2', '#48bb78', '#2f8d46', '#1b5e20'];
 
     for (let col = 0; col < 52; col++) {
-      const weekFactor = (Math.sin(col * 0.42 + (seed % 9)) + 1) / 2;
-      const isInactivePeriod = (col > 13 && col < 17) || (col > 29 && col < 32);
       for (let row = 0; row < 7; row++) {
-        const cellSeed = hashString(`${username}-${col}-${row}`);
-        let level = 0;
-        if (!isInactivePeriod) {
-          const prob = (cellSeed % 100) / 100;
-          if (prob < (0.26 + weekFactor * 0.54)) {
-            level = 1 + (cellSeed % 4);
-          }
-        }
-        const isLast = col === 51 && row === 6;
-        if (isLast && level === 0) level = 2;
+        const daysAgo = (51 - col) * 7 + (6 - row);
+        const cellDate = new Date(now.getTime() - daysAgo * 86400000);
+        const yyyy = cellDate.getFullYear();
+        const mm = String(cellDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(cellDate.getDate()).padStart(2, '0');
+        const dateKey = `${yyyy}-${mm}-${dd}`;
+
+        const entry = dateMap.get(dateKey);
+        const level = entry ? Math.max(1, Math.min(4, entry.level || entry.count || 1)) : 0;
+        const count = entry ? (entry.count || 1) : 0;
+        const isToday = col === 51 && row === 6;
+
         const x = (startX + col * (cellW + gap)).toFixed(1);
         const y = (startY + row * (cellH + gap)).toFixed(1);
         const color = levelColors[level];
-        const stroke = isLast ? 'stroke="#2f8d46" stroke-width="0.8"' : '';
-        rects += `<rect x="${x}" y="${y}" width="${cellW}" height="${cellH}" rx="1.5" fill="${color}" ${stroke}/>`;
+        const stroke = isToday ? 'stroke="#2f8d46" stroke-width="0.8"' : '';
+        const titleText = count > 0 ? `${dateKey}: ${count} submission${count === 1 ? '' : 's'}` : `${dateKey}: No submissions`;
+        rects += `<rect x="${x}" y="${y}" width="${cellW}" height="${cellH}" rx="1.5" fill="${color}" ${stroke}><title>${titleText}</title></rect>`;
       }
     }
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 295" class="gfg-card-svg" role="img" aria-label="GeeksforGeeks progress card for @${escapeHtml(username)}">
+    const maxProblemsScale = Math.max(actualTotal * 1.25, 400);
+    const ringOffset = (238.7 * (1 - Math.min(actualTotal / maxProblemsScale, 0.96))).toFixed(1);
+
+    const easyWidth = actualTotal > 0 ? Math.min(334, Math.max(8, (easyCount / actualTotal) * 334)).toFixed(1) : '0';
+    const mediumWidth = actualTotal > 0 ? Math.min(334, Math.max(8, (mediumCount / actualTotal) * 334)).toFixed(1) : '0';
+    const hardWidth = actualTotal > 0 ? Math.min(334, Math.max(8, (hardCount / actualTotal) * 334)).toFixed(1) : '0';
+
+    const streakLabel = currentStreak > 0
+      ? `Streak: ${currentStreak}d (Max ${longestStreak}d)`
+      : (longestStreak > 0 ? `Max Streak: ${longestStreak}d` : `${totalActiveDays} Active Days`);
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 295" class="gfg-card-svg" role="img" aria-label="GeeksforGeeks live progress card for @${escapeHtml(username)}">
       <defs>
         <linearGradient id="gfgRing" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#2f8d46"/>
@@ -235,7 +305,7 @@
         <rect x="0" y="3" width="26" height="26" rx="6" fill="#2f8d46"/>
         <path d="M7 16 C7 11 11 11 11 11 M7 16 C7 21 11 21 11 21 M19 16 C19 11 15 11 15 11 M19 16 C19 21 15 21 15 21" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round"/>
         <text x="34" y="23" fill="#16211d" font-family="'IBM Plex Sans', -apple-system, sans-serif" font-size="18" font-weight="700">${escapeHtml(username)}</text>
-        <text x="452" y="22" text-anchor="end" fill="#52625a" font-family="'IBM Plex Mono', monospace" font-size="13" font-weight="600">${globalRank}</text>
+        <text x="452" y="22" text-anchor="end" fill="#2f8d46" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="600">${escapeHtml(streakLabel)}</text>
       </g>
 
       <!-- Solved Ring & Breakdown -->
@@ -243,7 +313,7 @@
         <!-- Solved Ring -->
         <g transform="translate(42, 45)">
           <circle cx="0" cy="0" r="38" fill="none" stroke="#e6ece8" stroke-width="6.5"/>
-          <circle cx="0" cy="0" r="38" fill="none" stroke="url(#gfgRing)" stroke-width="6.5" stroke-dasharray="238.7" stroke-dashoffset="${(238.7 * (1 - Math.min(actualTotal / 800, 0.95))).toFixed(1)}" stroke-linecap="round" transform="rotate(-90)"/>
+          <circle cx="0" cy="0" r="38" fill="none" stroke="url(#gfgRing)" stroke-width="6.5" stroke-dasharray="238.7" stroke-dashoffset="${ringOffset}" stroke-linecap="round" transform="rotate(-90)"/>
           <text x="0" y="7" text-anchor="middle" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="22" font-weight="700">${actualTotal}</text>
           <text x="0" y="21" text-anchor="middle" fill="#718096" font-family="'IBM Plex Sans', sans-serif" font-size="9" font-weight="600" letter-spacing="0.5">SOLVED</text>
         </g>
@@ -252,21 +322,21 @@
         <g transform="translate(118, 12)">
           <!-- Easy -->
           <text x="0" y="11" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Easy</text>
-          <text x="334" y="11" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${easyCount} <tspan fill="#a0aec0">/ 960</tspan></text>
+          <text x="334" y="11" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${easyCount} <tspan fill="#a0aec0">${basicCount ? `(+${basicCount} basic)` : ''}</tspan></text>
           <rect x="0" y="17" width="334" height="4" rx="2" fill="#edf2f7"/>
-          <rect x="0" y="17" width="${Math.min(334, (334 * (easyCount / 960))).toFixed(1)}" height="4" rx="2" fill="#2f8d46"/>
+          <rect x="0" y="17" width="${easyWidth}" height="4" rx="2" fill="#2f8d46"/>
 
           <!-- Medium -->
           <text x="0" y="42" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Medium</text>
-          <text x="334" y="42" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${mediumCount} <tspan fill="#a0aec0">/ 2100</tspan></text>
+          <text x="334" y="42" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${mediumCount}</text>
           <rect x="0" y="48" width="334" height="4" rx="2" fill="#edf2f7"/>
-          <rect x="0" y="48" width="${Math.min(334, (334 * (mediumCount / 2100))).toFixed(1)}" height="4" rx="2" fill="#d97706"/>
+          <rect x="0" y="48" width="${mediumWidth}" height="4" rx="2" fill="#d97706"/>
 
           <!-- Hard -->
           <text x="0" y="73" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Hard</text>
-          <text x="334" y="73" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${hardCount} <tspan fill="#a0aec0">/ 960</tspan></text>
+          <text x="334" y="73" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${hardCount}</text>
           <rect x="0" y="79" width="334" height="4" rx="2" fill="#edf2f7"/>
-          <rect x="0" y="79" width="${Math.min(334, (334 * (hardCount / 960))).toFixed(1)}" height="4" rx="2" fill="#dc2626"/>
+          <rect x="0" y="79" width="${hardWidth}" height="4" rx="2" fill="#dc2626"/>
         </g>
       </g>
 
@@ -274,8 +344,8 @@
       <line x1="24" y1="168" x2="476" y2="168" stroke="#edf0ed" stroke-width="1"/>
 
       <!-- Heatmap Header -->
-      <text x="24" y="196" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Heatmap (Last 52 Weeks)</text>
-      <text x="476" y="196" text-anchor="end" fill="#2f8d46" font-family="'IBM Plex Mono', monospace" font-size="11" font-weight="600">Score ${codingScore.toLocaleString()}</text>
+      <text x="24" y="196" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Live Activity Heatmap (52 Weeks)</text>
+      <text x="476" y="196" text-anchor="end" fill="#2f8d46" font-family="'IBM Plex Mono', monospace" font-size="11" font-weight="600">${totalSubmissions} Submissions · ${totalActiveDays} Active Days</text>
 
       <!-- Heatmap Grid -->
       ${rects}
@@ -335,6 +405,46 @@
     showToast('LeetCode card refreshed.');
   }
 
+  async function loadGfgProgress(username, force = false) {
+    const userSlug = String(username || '').trim();
+    if (!userSlug) {
+      $('#gfg-updated').textContent = 'not connected';
+      $('#gfg-status').innerHTML = emptyState('Enter your public GeeksforGeeks username to view its live heatmap.');
+      return;
+    }
+
+    const cached = !force ? PrepStorage.getGfgCache(userSlug) : null;
+    if (cached && cached.stats) {
+      $('#gfg-updated').textContent = `live card for @${userSlug}`;
+      $('#gfg-status').innerHTML = generateGfgHeatmapSvg(userSlug, cached.stats, cached.heatmap);
+    } else {
+      $('#gfg-updated').textContent = 'syncing with GFG...';
+      $('#gfg-status').innerHTML = `<div class="empty-state"><span class="loading-spinner"></span> Fetching live GeeksforGeeks data for @${escapeHtml(userSlug)}...</div>`;
+    }
+
+    const currentFetchSeq = ++gfgFetchSeq;
+    const result = await fetchGfgUser(userSlug);
+
+    if (currentFetchSeq !== gfgFetchSeq || gfgUsername !== userSlug) return;
+
+    if (result.notFound) {
+      $('#gfg-updated').textContent = 'user not found';
+      $('#gfg-status').innerHTML = `<div class="empty-state">No public profile found for <strong>@${escapeHtml(userSlug)}</strong> on GeeksforGeeks. Please verify the handle.</div>`;
+      return;
+    }
+
+    if (result.ok && result.stats) {
+      PrepStorage.setGfgCache(userSlug, { stats: result.stats, heatmap: result.heatmap, fetchedAt: Date.now() });
+      $('#gfg-updated').textContent = `live card for @${userSlug}`;
+      $('#gfg-status').innerHTML = generateGfgHeatmapSvg(userSlug, result.stats, result.heatmap);
+    } else if (!cached) {
+      // Fallback to direct SVG stats badge embed if JSON endpoints were unreachable
+      $('#gfg-updated').textContent = `live card for @${userSlug}`;
+      const imgUrl = `https://gfg-stats-api.vercel.app/${encodeURIComponent(userSlug)}/stats/svg?theme=light&v=${Date.now()}`;
+      $('#gfg-status').innerHTML = `<img class="gfg-image" src="${imgUrl}" alt="GeeksforGeeks stats for @${escapeHtml(userSlug)}" onerror="this.parentElement.innerHTML='<div class=\\'empty-state\\'>Unable to load GeeksforGeeks data right now. Please try again.</div>'" />`;
+    }
+  }
+
   function renderGfgProgress() {
     const input = $('#gfg-username');
     const button = $('#gfg-refresh');
@@ -348,8 +458,7 @@
       return;
     }
 
-    $('#gfg-updated').textContent = `live card for @${gfgUsername}`;
-    $('#gfg-status').innerHTML = generateGfgHeatmapSvg(gfgUsername);
+    loadGfgProgress(gfgUsername, false);
   }
 
   function refreshGfgProgress(username = $('#gfg-username').value) {
@@ -365,8 +474,8 @@
     gfgUsername = userSlug;
     gfgCardVersion = String(Date.now());
     PrepStorage.setGfgUsername(userSlug);
-    renderGfgProgress();
-    showToast('GFG card refreshed.');
+    loadGfgProgress(userSlug, true);
+    showToast('Refreshing live GFG data...');
   }
 
   function renderQuestions() {
