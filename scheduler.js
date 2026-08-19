@@ -126,6 +126,39 @@ const Scheduler = (function () {
     return daysArr[date.getDay()];
   }
 
+  // Check if a weekly scheduled session has already concluded in current real time
+  function isSessionPast(day, timeStr, durationMinutes) {
+    if (!day || !timeStr) return true;
+    let now = new Date();
+    let dayMap = { 0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5 }; // Sun=6, Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5
+    let currentDayIndex = dayMap[now.getDay()];
+    let slotDayIndex = DAYS.indexOf(day);
+
+    if (slotDayIndex === -1) return true;
+
+    if (currentDayIndex > slotDayIndex) {
+      return true; // Day has already passed earlier in the current week
+    }
+    if (currentDayIndex < slotDayIndex) {
+      return false; // Day is later in the current week
+    }
+
+    // Same day: check if current time in minutes >= slot start time + duration
+    let currentMinutes = now.getHours() * 60 + now.getMinutes();
+    let startMinutes = timeToMinutes(timeStr);
+    let dur = parseInt(durationMinutes, 10) || 60;
+    let endMinutes = startMinutes + dur;
+
+    return currentMinutes >= endMinutes;
+  }
+
+  // Get formatted end time display for a session
+  function getEndTimeDisplay(timeStr, durationMinutes) {
+    let startMinutes = timeToMinutes(timeStr);
+    let dur = parseInt(durationMinutes, 10) || 60;
+    return formatDisplayTime(startMinutes + dur);
+  }
+
   return {
     DAYS: DAYS,
     TIMES: DEFAULT_TIMES,
@@ -133,12 +166,14 @@ const Scheduler = (function () {
     timeToMinutes: timeToMinutes,
     normalizeTime: normalizeTime,
     formatDisplayTime: formatDisplayTime,
+    getEndTimeDisplay: getEndTimeDisplay,
     getAllScheduleTimes: getAllScheduleTimes,
     samePerson: samePerson,
     slotBooking: slotBooking,
     personHasConflict: personHasConflict,
     hasOfferedSlot: hasOfferedSlot,
-    weekdayShort: weekdayShort
+    weekdayShort: weekdayShort,
+    isSessionPast: isSessionPast
   };
 })();
 

@@ -1153,10 +1153,19 @@ function renderSchedule() {
 
     if (item.booking.status === "confirmed") {
       if (isHost) {
-        feedbackCol = `
-          <button class="table-button" type="button" data-done="${item.booking.id}">Mark done</button>
-          <button class="table-button reject-button" type="button" data-reject="${item.booking.id}">Reject</button>
-        `;
+        let isPast = Scheduler.isSessionPast(item.slot.day, item.slot.time, item.slot.duration);
+        if (isPast) {
+          feedbackCol = `
+            <button class="table-button" type="button" data-done="${item.booking.id}">Mark done</button>
+            <button class="table-button reject-button" type="button" data-reject="${item.booking.id}">Reject</button>
+          `;
+        } else {
+          let endTimeDisplay = Scheduler.getEndTimeDisplay(item.slot.time, item.slot.duration);
+          feedbackCol = `
+            <button class="table-button is-disabled" type="button" disabled title="Meeting is scheduled for ${escapeHtml(item.slot.day)} ${escapeHtml(displayTime)}. You can mark it done after the session concludes at ${escapeHtml(endTimeDisplay)}.">Mark done (Pending)</button>
+            <button class="table-button reject-button" type="button" data-reject="${item.booking.id}">Reject</button>
+          `;
+        }
       } else {
         feedbackCol = `
           <button class="table-button reject-button" type="button" data-cancel="${item.booking.id}">Cancel meeting</button>
@@ -1164,7 +1173,7 @@ function renderSchedule() {
       }
     } else if (item.booking.status === "done" && !item.booking.feedback) {
       feedbackCol = `
-        <button class="table-button" type="button" data-feedback="${item.booking.id}">Add</button>
+        <button class="table-button" type="button" data-feedback="${item.booking.id}">Add feedback</button>
       `;
     } else if (item.booking.feedback) {
       let fb = item.booking.feedback;
@@ -1377,6 +1386,17 @@ function markDone(id) {
   let bookings = PrepStorage.getBookings();
   let target = bookings.find(function (b) { return b.id === id; });
   if (!target) return;
+
+  let slots = PrepStorage.getSlots();
+  let targetSlot = slots.find(function (s) { return s.id === target.slotId; });
+  if (targetSlot) {
+    let isPast = Scheduler.isSessionPast(targetSlot.day, targetSlot.time, targetSlot.duration);
+    if (!isPast) {
+      let endTime = Scheduler.getEndTimeDisplay(targetSlot.time, targetSlot.duration);
+      showToast(`Cannot mark done yet. This session concludes on ${targetSlot.day} at ${endTime}.`);
+      return;
+    }
+  }
 
   target.status = "done";
   PrepStorage.setBookings(bookings);
