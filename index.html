@@ -104,9 +104,39 @@
         </section>
 
         <section id="schedule" class="panel" role="tabpanel" hidden>
-          <div class="section-intro"><p class="eyebrow">Peer mock interviews</p><h1>Put practice on the calendar.</h1><p>Offer a session or book an open slot. The scheduler prevents double-booking.</p></div>
-          <section class="offer-section"><button id="offer-toggle" class="offer-toggle" type="button" aria-expanded="false" aria-controls="offer-form">+ Offer a slot</button><form id="offer-form" class="offer-form" hidden><label>Day<select name="day"></select></label><label>Time<select name="time"></select></label><button class="button slate-button" type="submit">Offer slot</button></form></section>
-          <section class="card grid-card" aria-labelledby="grid-title"><div class="card-heading"><div><p class="eyebrow">Weekly availability</p><h2 id="grid-title">Find a practice partner</h2></div><span class="data-note">all times local</span></div><div class="schedule-scroll"><div id="schedule-grid" class="schedule-grid" aria-label="Weekly interview availability grid"></div></div></section>
+          <div class="section-intro"><p class="eyebrow">Peer mock interviews</p><h1>Put practice on the calendar.</h1><p>Offer a session or book an open slot. You can select any custom time or click a grid cell directly.</p></div>
+          <section class="offer-section">
+            <button id="offer-toggle" class="offer-toggle" type="button" aria-expanded="false" aria-controls="offer-form">+ Offer a slot</button>
+            <form id="offer-form" class="offer-form" hidden>
+              <div class="offer-form-main">
+                <label>Day<select name="day" required></select></label>
+                <label>Start time<input name="time" type="time" required value="10:00" /></label>
+                <label>Duration
+                  <select name="duration">
+                    <option value="30">30 min</option>
+                    <option value="45">45 min</option>
+                    <option value="60" selected>60 min</option>
+                    <option value="90">90 min</option>
+                  </select>
+                </label>
+                <label class="offer-topic-label">Focus / Topic <span class="optional">optional</span><input name="topic" type="text" maxlength="80" placeholder="e.g. System Design, LeetCode Trees" /></label>
+                <div class="offer-submit-col"><button class="button slate-button" type="submit">Offer slot</button></div>
+              </div>
+              <div class="quick-time-presets" aria-label="Quick time selection">
+                <span class="preset-label">Quick time presets:</span>
+                <div class="preset-chips">
+                  <button type="button" class="chip-button" data-preset-time="09:00">09:00 AM</button>
+                  <button type="button" class="chip-button" data-preset-time="11:00">11:00 AM</button>
+                  <button type="button" class="chip-button" data-preset-time="13:00">01:00 PM</button>
+                  <button type="button" class="chip-button" data-preset-time="15:00">03:00 PM</button>
+                  <button type="button" class="chip-button" data-preset-time="17:00">05:00 PM</button>
+                  <button type="button" class="chip-button" data-preset-time="19:00">07:00 PM</button>
+                  <button type="button" class="chip-button" data-preset-time="20:00">08:00 PM</button>
+                </div>
+              </div>
+            </form>
+          </section>
+          <section class="card grid-card" aria-labelledby="grid-title"><div class="card-heading"><div><p class="eyebrow">Weekly availability</p><h2 id="grid-title">Find a practice partner</h2></div><span class="data-note">click open cell to offer · all times local</span></div><div class="schedule-scroll"><div id="schedule-grid" class="schedule-grid" aria-label="Weekly interview availability grid"></div></div></section>
           <section class="card table-card" aria-labelledby="bookings-title"><div class="card-heading"><div><p class="eyebrow">Your sessions</p><h2 id="bookings-title">My bookings</h2></div><span id="booking-total" class="data-note">enter your name to filter</span></div><div id="bookings-table-wrap"></div></section>
         </section>
       </main>

@@ -823,7 +823,7 @@ function renderDashboard() {
   let sessionsListHtml = "";
   if (todaySessions.length > 0) {
     todaySessions.sort(function (a, b) {
-      return Scheduler.TIMES.indexOf(a.slot.time) - Scheduler.TIMES.indexOf(b.slot.time);
+      return Scheduler.timeToMinutes(a.slot.time) - Scheduler.timeToMinutes(b.slot.time);
     });
 
     for (let i = 0; i < todaySessions.length; i++) {
@@ -832,12 +832,13 @@ function renderDashboard() {
       let otherPerson = isHost ? item.booking.requesterName : item.slot.hostName;
       let roleText = isHost ? "hosting" : "attending";
       let badgeText = isHost ? "host" : "guest";
+      let displayTime = Scheduler.formatDisplayTime(item.slot.time);
 
       sessionsListHtml += `
         <div class="list-row">
           <div class="list-primary">
-            <span>${escapeHtml(item.slot.time)} with ${escapeHtml(otherPerson)}</span>
-            <div class="list-meta">${roleText}</div>
+            <span>${escapeHtml(displayTime)} with ${escapeHtml(otherPerson)}</span>
+            <div class="list-meta">${roleText}${item.slot.topic ? ` · ${escapeHtml(item.slot.topic)}` : ""}</div>
           </div>
           <span class="status-word">${badgeText}</span>
         </div>
@@ -964,24 +965,70 @@ function onQuestionSubmit(event) {
 }
 
 // Build a single slot grid cell
-function getGridCell(slot, slotBookingsMap, currentUser) {
+function getGridCell(slot, slotBookingsMap, currentUser, day, time) {
+  let displayTime = Scheduler.formatDisplayTime(time);
+
   if (!slot) {
-    return '<div class="slot-cell" aria-label="No slot offered"></div>';
+    return `<button class="slot-cell is-empty" type="button" data-offer-day="${escapeHtml(day)}" data-offer-time="${escapeHtml(time)}" aria-label="Offer slot for ${escapeHtml(day)} at ${escapeHtml(displayTime)}" title="Click to offer a slot on ${escapeHtml(day)} at ${escapeHtml(displayTime)}"><span class="empty-plus">+</span><span class="empty-hint">Offer</span></button>`;
   }
 
   let booking = slotBookingsMap.get(slot.id);
   let isMySlot = currentUser && Scheduler.samePerson(slot.hostName, currentUser);
   let isInvolved = booking && currentUser && (isMySlot || Scheduler.samePerson(booking.requesterName, currentUser));
+  let duration = slot.duration ? `${slot.duration}m` : "60m";
+  let topicBadge = slot.topic ? `<span class="slot-topic-badge" title="${escapeHtml(slot.topic)}">${escapeHtml(slot.topic)}</span>` : "";
 
+  // 1. Open slot offered by someone else
   if (!booking && !isMySlot) {
-    return `<button class="slot-cell is-open" type="button" data-book-slot="${slot.id}" aria-label="Book ${escapeHtml(slot.hostName)}’s slot">book</button>`;
+    return `
+      <div class="slot-cell is-open">
+        <div class="slot-cell-header">
+          <span class="slot-host" title="Host: ${escapeHtml(slot.hostName)}">${escapeHtml(slot.hostName)}</span>
+          <span class="slot-duration-pill">${duration}</span>
+        </div>
+        ${topicBadge}
+        <button class="slot-action-btn book-btn" type="button" data-book-slot="${slot.id}" aria-label="Book ${escapeHtml(slot.hostName)}’s slot at ${escapeHtml(displayTime)}">Book</button>
+      </div>
+    `;
   }
 
+  // 2. Open slot offered by current user
   if (!booking && isMySlot) {
-    return '<div class="slot-cell is-mine" aria-label="Your open slot">open</div>';
+    return `
+      <div class="slot-cell is-mine">
+        <div class="slot-cell-header">
+          <span class="slot-badge-mine">Your slot</span>
+          <span class="slot-duration-pill">${duration}</span>
+        </div>
+        ${topicBadge}
+        <button class="slot-action-btn remove-btn" type="button" data-remove-slot="${slot.id}" title="Remove your open slot" aria-label="Remove slot">Remove</button>
+      </div>
+    `;
   }
 
-  return `<div class="slot-cell is-booked" aria-label="${isInvolved ? "Your booked session" : "Booked"}">${isInvolved ? "yours" : "taken"}</div>`;
+  // 3. Booked session involving current user
+  if (booking && isInvolved) {
+    let otherPerson = isMySlot ? booking.requesterName : slot.hostName;
+    let roleText = isMySlot ? "Host" : "Guest";
+    return `
+      <div class="slot-cell is-booked-mine">
+        <div class="slot-cell-header">
+          <span class="slot-badge-booked">Booked</span>
+          <span class="slot-duration-pill">${duration}</span>
+        </div>
+        <span class="slot-peer" title="With ${escapeHtml(otherPerson)}">w/ ${escapeHtml(otherPerson)}</span>
+        <span class="slot-role-tag">${roleText}</span>
+      </div>
+    `;
+  }
+
+  // 4. Booked session between other users
+  return `
+    <div class="slot-cell is-booked">
+      <span class="slot-taken-label">Booked</span>
+      <span class="slot-duration-pill">${duration}</span>
+    </div>
+  `;
 }
 
 // Render schedule tab
@@ -999,22 +1046,25 @@ function renderSchedule() {
     slotBookingsMap.set(activeBookings[i].slotId, activeBookings[i]);
   }
 
+  let allTimes = Scheduler.getAllScheduleTimes(slots);
+
   // 1. Build weekly availability grid
-  let gridHtml = '<div class="grid-corner grid-header"></div>';
+  let gridHtml = '<div class="grid-corner grid-header">Time</div>';
   for (let i = 0; i < Scheduler.DAYS.length; i++) {
     gridHtml += `<div class="grid-header">${Scheduler.DAYS[i]}</div>`;
   }
 
-  for (let t = 0; t < Scheduler.TIMES.length; t++) {
-    let time = Scheduler.TIMES[t];
-    gridHtml += `<div class="time-label">${time}</div>`;
+  for (let t = 0; t < allTimes.length; t++) {
+    let time = allTimes[t];
+    let displayTime = Scheduler.formatDisplayTime(time);
+    gridHtml += `<div class="time-label" title="${time}"><span class="time-display">${displayTime}</span><span class="time-24h">${time}</span></div>`;
 
     for (let d = 0; d < Scheduler.DAYS.length; d++) {
       let day = Scheduler.DAYS[d];
       let matchingSlot = slots.find(function (s) {
-        return s.day === day && s.time === time;
+        return s.day === day && Scheduler.normalizeTime(s.time) === time;
       });
-      gridHtml += getGridCell(matchingSlot, slotBookingsMap, currentUser);
+      gridHtml += getGridCell(matchingSlot, slotBookingsMap, currentUser, day, time);
     }
   }
 
@@ -1061,7 +1111,7 @@ function renderSchedule() {
   myBookings.sort(function (a, b) {
     let dayDiff = Scheduler.DAYS.indexOf(a.slot.day) - Scheduler.DAYS.indexOf(b.slot.day);
     if (dayDiff !== 0) return dayDiff;
-    return Scheduler.TIMES.indexOf(a.slot.time) - Scheduler.TIMES.indexOf(b.slot.time);
+    return Scheduler.timeToMinutes(a.slot.time) - Scheduler.timeToMinutes(b.slot.time);
   });
 
   let bookingRowsHtml = "";
@@ -1071,6 +1121,9 @@ function renderSchedule() {
     let otherPerson = isHost ? item.booking.requesterName : item.slot.hostName;
     let roleText = isHost ? "Host" : "Requester";
     let feedbackCol = "";
+    let displayTime = Scheduler.formatDisplayTime(item.slot.time);
+    let duration = item.slot.duration ? ` (${item.slot.duration}m)` : "";
+    let topicCol = item.slot.topic ? `<div class="topic-sub">${escapeHtml(item.slot.topic)}</div>` : "";
 
     if (item.booking.status === "confirmed") {
       if (isHost) {
@@ -1101,7 +1154,7 @@ function renderSchedule() {
     bookingRowsHtml += `
       <tr>
         <td class="mono">${item.slot.day}</td>
-        <td class="mono">${item.slot.time}</td>
+        <td class="mono"><strong>${escapeHtml(displayTime)}</strong>${duration}${topicCol}</td>
         <td>${roleText}</td>
         <td>${escapeHtml(otherPerson)}</td>
         <td><span class="pill ${item.booking.status}">${escapeHtml(item.booking.status)}</span></td>
@@ -1144,26 +1197,104 @@ function onOfferSubmit(event) {
 
   let form = event.target;
   let day = form.elements["day"].value;
-  let time = form.elements["time"].value;
+  let rawTime = form.elements["time"].value;
+  let duration = Number(form.elements["duration"] ? form.elements["duration"].value : 60) || 60;
+  let topic = form.elements["topic"] ? form.elements["topic"].value.trim() : "";
+
+  if (!day || !rawTime) {
+    showToast("Please specify both day and time.");
+    return;
+  }
+
+  let normalizedTime = Scheduler.normalizeTime(rawTime);
   let slots = PrepStorage.getSlots();
 
-  if (Scheduler.hasOfferedSlot(slots, user, day, time)) {
-    showToast("You already offered that day and time.");
+  if (Scheduler.hasOfferedSlot(slots, user, day, normalizedTime)) {
+    showToast(`You already offered a slot on ${day} at ${Scheduler.formatDisplayTime(normalizedTime)}.`);
+    return;
+  }
+
+  let bookings = PrepStorage.getBookings();
+  if (Scheduler.personHasConflict({ slots: slots, bookings: bookings }, user, day, normalizedTime)) {
+    showToast(`You already have a booked session on ${day} at ${Scheduler.formatDisplayTime(normalizedTime)}.`);
     return;
   }
 
   let newSlot = {
     id: PrepStorage.uid(),
     day: day,
-    time: time,
-    hostName: user
+    time: normalizedTime,
+    duration: duration,
+    topic: topic,
+    hostName: user,
+    createdAt: Date.now()
   };
 
   slots.push(newSlot);
   PrepStorage.setSlots(slots);
-  showToast("Your availability is now open for booking.");
-  form.reset();
+  showToast(`Added open slot for ${day} at ${Scheduler.formatDisplayTime(normalizedTime)}!`);
+
+  form.elements["topic"].value = "";
   renderAll();
+}
+
+// Remove an unbooked offered slot
+function removeSlot(slotId) {
+  let user = getCurrentUserName();
+  let slots = PrepStorage.getSlots();
+  let bookings = PrepStorage.getBookings();
+
+  let slotIndex = slots.findIndex(function (s) { return s.id === slotId; });
+  if (slotIndex === -1) {
+    showToast("Slot not found.");
+    return;
+  }
+
+  let targetSlot = slots[slotIndex];
+  if (!Scheduler.samePerson(targetSlot.hostName, user)) {
+    showToast("You can only remove your own slots.");
+    return;
+  }
+
+  let hasActiveBooking = bookings.some(function (b) {
+    return b.slotId === slotId && b.status !== "cancelled";
+  });
+
+  if (hasActiveBooking) {
+    showToast("This slot is already booked. Please reject/cancel the session first.");
+    return;
+  }
+
+  slots.splice(slotIndex, 1);
+  PrepStorage.setSlots(slots);
+  showToast(`Removed slot for ${targetSlot.day} at ${Scheduler.formatDisplayTime(targetSlot.time)}.`);
+  renderAll();
+}
+
+// Open offer form pre-filled for a specific calendar cell
+function openOfferForSlot(day, time) {
+  let form = document.getElementById("offer-form");
+  let toggle = document.getElementById("offer-toggle");
+
+  if (form.hidden) {
+    form.hidden = false;
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.textContent = "− Hide slot form";
+  }
+
+  if (form.elements["day"]) {
+    form.elements["day"].value = day;
+  }
+  if (form.elements["time"]) {
+    form.elements["time"].value = Scheduler.normalizeTime(time);
+  }
+
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  let timeInput = form.elements["time"];
+  if (timeInput) {
+    timeInput.focus();
+  }
+  showToast(`Selected ${day} at ${Scheduler.formatDisplayTime(time)}. Customize & submit.`);
 }
 
 // Book an open slot
@@ -1197,7 +1328,7 @@ function tryBooking(slotId) {
   }
 
   if (Scheduler.personHasConflict({ slots: slots, bookings: bookings }, user, targetSlot.day, targetSlot.time)) {
-    showToast(`You already have a session at ${targetSlot.day} ${targetSlot.time}.`);
+    showToast(`You already have a session on ${targetSlot.day} at ${Scheduler.formatDisplayTime(targetSlot.time)}.`);
     return;
   }
 
@@ -1211,7 +1342,7 @@ function tryBooking(slotId) {
 
   bookings.push(newBooking);
   PrepStorage.setBookings(bookings);
-  showToast(`Booked ${targetSlot.hostName}’s ${targetSlot.day} ${targetSlot.time} slot.`);
+  showToast(`Booked ${targetSlot.hostName}’s ${targetSlot.day} ${Scheduler.formatDisplayTime(targetSlot.time)} session.`);
   renderAll();
 }
 
@@ -1339,10 +1470,8 @@ function initialize() {
   identityInput.readOnly = Boolean(currentUserAccount);
   identityInput.value = currentUserAccount ? currentUserAccount.name : PrepStorage.getWhoami();
 
-  // Populate day and time dropdowns in offer form
+  // Populate day dropdown in offer form
   let daySelect = document.querySelector('#offer-form select[name="day"]');
-  let timeSelect = document.querySelector('#offer-form select[name="time"]');
-
   if (daySelect) {
     let dayOptionsHtml = "";
     for (let i = 0; i < Scheduler.DAYS.length; i++) {
@@ -1351,13 +1480,18 @@ function initialize() {
     daySelect.innerHTML = dayOptionsHtml;
   }
 
-  if (timeSelect) {
-    let timeOptionsHtml = "";
-    for (let i = 0; i < Scheduler.TIMES.length; i++) {
-      timeOptionsHtml += `<option value="${Scheduler.TIMES[i]}">${Scheduler.TIMES[i]}</option>`;
-    }
-    timeSelect.innerHTML = timeOptionsHtml;
-  }
+  // Quick preset chips event listeners
+  document.querySelectorAll("[data-preset-time]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      let presetTime = btn.getAttribute("data-preset-time");
+      let timeInput = document.querySelector('#offer-form input[name="time"]');
+      if (timeInput) {
+        timeInput.value = presetTime;
+        timeInput.focus();
+        showToast(`Time set to ${Scheduler.formatDisplayTime(presetTime)}`);
+      }
+    });
+  });
 
   // Navigation tab buttons
   let navTabs = document.querySelectorAll(".tab");
@@ -1434,15 +1568,29 @@ function initialize() {
     offerToggle.setAttribute("aria-expanded", String(isHidden));
     offerToggle.textContent = isHidden ? "− Hide slot form" : "+ Offer a slot";
     if (isHidden) {
-      form.querySelector("select").focus();
+      form.querySelector("input, select").focus();
     }
   });
 
-  // Schedule grid booking button delegation
+  // Schedule grid actions delegation (book, remove, or quick offer from empty cell)
   document.getElementById("schedule-grid").addEventListener("click", function (event) {
     let bookBtn = event.target.closest("[data-book-slot]");
     if (bookBtn) {
       tryBooking(bookBtn.getAttribute("data-book-slot"));
+      return;
+    }
+
+    let removeBtn = event.target.closest("[data-remove-slot]");
+    if (removeBtn) {
+      removeSlot(removeBtn.getAttribute("data-remove-slot"));
+      return;
+    }
+
+    let emptyCell = event.target.closest("[data-offer-day]");
+    if (emptyCell) {
+      let day = emptyCell.getAttribute("data-offer-day");
+      let time = emptyCell.getAttribute("data-offer-time");
+      openOfferForSlot(day, time);
     }
   });
 
