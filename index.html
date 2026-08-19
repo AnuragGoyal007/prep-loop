@@ -31,7 +31,16 @@
         <form id="signup-form" class="auth-form" hidden novalidate>
           <label>Full name<input name="name" type="text" placeholder="Your name" required maxlength="60" /></label>
           <label>Email<input name="email" type="email" placeholder="you@example.com" required /></label>
-          <label>Password<input name="password" type="password" placeholder="Create a password" required minlength="4" /></label>
+          <label>Password<input name="password" type="password" placeholder="Create a password (min 4 characters)" required minlength="4" /></label>
+          <div class="auth-row-grid">
+            <label>University<input name="university" type="text" placeholder="e.g. Stanford University" required maxlength="120" /></label>
+            <label>Course / Branch<input name="course" type="text" placeholder="e.g. Computer Science" required maxlength="120" /></label>
+          </div>
+          <label>Year of study<input name="year" type="text" placeholder="e.g. 3rd Year / 2026" required maxlength="60" /></label>
+          <div class="auth-row-grid">
+            <label>LeetCode handle <span class="optional">optional</span><input name="leetcode" type="text" placeholder="e.g. leetcode_user" maxlength="60" /></label>
+            <label>GFG handle <span class="optional">optional</span><input name="gfg" type="text" placeholder="e.g. gfg_user" maxlength="60" /></label>
+          </div>
           <button type="submit" class="button auth-button">Create account</button>
         </form>
       </div>

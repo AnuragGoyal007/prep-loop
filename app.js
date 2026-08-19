@@ -174,9 +174,14 @@ function handleSignup(event) {
   let name = form.elements["name"].value.trim();
   let email = form.elements["email"].value.trim().toLowerCase();
   let password = form.elements["password"].value;
+  let university = form.elements["university"] ? form.elements["university"].value.trim() : "";
+  let course = form.elements["course"] ? form.elements["course"].value.trim() : "";
+  let year = form.elements["year"] ? form.elements["year"].value.trim() : "";
+  let leetcode = form.elements["leetcode"] ? form.elements["leetcode"].value.trim() : "";
+  let gfg = form.elements["gfg"] ? form.elements["gfg"].value.trim() : "";
 
-  if (!name || !email || !password) {
-    showToast("Please fill in all fields.");
+  if (!name || !email || !password || !university || !course || !year) {
+    showToast("Please fill in all mandatory fields (Name, Email, Password, University, Course, Year).");
     return;
   }
 
@@ -199,7 +204,11 @@ function handleSignup(event) {
     id: PrepStorage.uid(),
     name: name,
     email: email,
-    password: password
+    password: password,
+    university: university,
+    course: course,
+    courseRole: course,
+    year: year
   };
 
   users.push(newUser);
@@ -207,22 +216,38 @@ function handleSignup(event) {
   PrepStorage.setCurrentUser(newUser);
   PrepStorage.setWhoami(name);
 
+  // Set optional LeetCode and GFG handles if provided
+  if (leetcode) {
+    PrepStorage.setLeetCodeUsername(leetcode);
+    leetCodeUsername = leetcode;
+    leetCardVersion = String(Date.now());
+  } else {
+    leetCodeUsername = "";
+    leetCardVersion = "";
+  }
+
+  if (gfg) {
+    PrepStorage.setGfgUsername(gfg);
+    gfgUsername = gfg;
+    gfgCardVersion = String(Date.now());
+  } else {
+    gfgUsername = "";
+    gfgCardVersion = "";
+  }
+
   form.reset();
 
   let identityInput = document.getElementById("identity-input");
-  identityInput.value = name;
-  identityInput.readOnly = true;
+  if (identityInput) {
+    identityInput.value = name;
+    identityInput.readOnly = true;
+  }
 
   setIdentityFromAccount();
   showAppScreen();
 
-  leetCodeUsername = "";
-  leetCardVersion = "";
-  gfgUsername = "";
-  gfgCardVersion = "";
-
   renderAll();
-  showToast(`Account created for ${name}!`);
+  showToast(`Account created for ${name}! Welcome to Prep Loop.`);
 }
 
 // Handle logout
@@ -355,6 +380,7 @@ function saveProfile(event) {
     ...account,
     university: form.elements["university"].value.trim(),
     year: form.elements["year"].value.trim(),
+    course: form.elements["courseRole"].value.trim(),
     courseRole: form.elements["courseRole"].value.trim()
   };
   let photoFile = form.elements["photo"].files[0];
