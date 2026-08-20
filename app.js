@@ -19,13 +19,22 @@ const GFG_API_ENDPOINTS = [
 function applyTheme(theme) {
   let isDark = theme === "dark";
   document.body.classList.toggle("theme-dark", isDark);
+
   let toggle = document.getElementById("theme-toggle");
   let icon = document.getElementById("theme-icon");
-  if (!toggle || !icon) return;
+  if (toggle && icon) {
+    icon.textContent = isDark ? "☀️" : "🌙";
+    toggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+    toggle.title = isDark ? "Switch to light mode" : "Switch to dark mode";
+  }
 
-  icon.textContent = isDark ? "☀️" : "🌙";
-  toggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
-  toggle.title = isDark ? "Switch to light mode" : "Switch to dark mode";
+  let landingToggle = document.getElementById("landing-theme-toggle");
+  let landingIcon = document.querySelector(".landing-theme-icon");
+  if (landingToggle && landingIcon) {
+    landingIcon.textContent = isDark ? "☀️" : "🌙";
+    landingToggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+    landingToggle.title = isDark ? "Switch to light mode" : "Switch to dark mode";
+  }
 }
 
 function toggleTheme() {
@@ -91,14 +100,61 @@ function formatDateDot(date) {
 }
 
 // Screen display helpers
-function showAuthScreen() {
-  document.getElementById("auth-screen").hidden = false;
-  document.getElementById("app-page").hidden = true;
+function showLandingScreen() {
+  let landing = document.getElementById("landing-screen");
+  let auth = document.getElementById("auth-screen");
+  let app = document.getElementById("app-page");
+
+  if (landing) landing.hidden = false;
+  if (auth) auth.hidden = true;
+  if (app) app.hidden = true;
+
+  // Update landing CTA actions based on authentication state
+  let account = getCurrentAccount();
+  let guestActions = document.getElementById("landing-guest-actions");
+  let userActions = document.getElementById("landing-user-actions");
+  if (guestActions && userActions) {
+    if (account) {
+      guestActions.hidden = true;
+      userActions.hidden = false;
+      let dashBtn = document.getElementById("landing-dashboard-btn");
+      if (dashBtn) {
+        dashBtn.textContent = `Go to Dashboard (${account.name || "My Account"}) →`;
+      }
+    } else {
+      guestActions.hidden = false;
+      userActions.hidden = true;
+    }
+  }
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function showAuthScreen(mode = "login") {
+  let landing = document.getElementById("landing-screen");
+  let auth = document.getElementById("auth-screen");
+  let app = document.getElementById("app-page");
+
+  if (landing) landing.hidden = true;
+  if (auth) auth.hidden = false;
+  if (app) app.hidden = true;
+
+  switchAuthMode(mode);
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function showAppScreen() {
-  document.getElementById("auth-screen").hidden = true;
-  document.getElementById("app-page").hidden = false;
+  let landing = document.getElementById("landing-screen");
+  let auth = document.getElementById("auth-screen");
+  let app = document.getElementById("app-page");
+
+  if (landing) landing.hidden = true;
+  if (auth) auth.hidden = true;
+  if (app) app.hidden = false;
+
+  setIdentityFromAccount();
+  renderAll();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 // Set user identity field from logged-in account
@@ -286,7 +342,7 @@ function handleLogout() {
   gfgCardVersion = "";
 
   switchAuthMode("login");
-  showAuthScreen();
+  showLandingScreen();
   showToast("Logged out successfully.");
 }
 
@@ -1734,19 +1790,40 @@ function initialize() {
   });
   window.addEventListener("focus", renderAll);
 
-  // Initial user setup
+  // Landing page action buttons (Get Started, Log in, Sign up)
+  let authActionBtns = document.querySelectorAll("[data-auth-action]");
+  authActionBtns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      let action = btn.getAttribute("data-auth-action") || "login";
+      showAuthScreen(action);
+    });
+  });
+
+  let authBackHomeBtn = document.getElementById("auth-back-home");
+  if (authBackHomeBtn) {
+    authBackHomeBtn.addEventListener("click", showLandingScreen);
+  }
+
+  let landingDashBtn = document.getElementById("landing-dashboard-btn");
+  if (landingDashBtn) {
+    landingDashBtn.addEventListener("click", showAppScreen);
+  }
+
+  let landingThemeToggle = document.getElementById("landing-theme-toggle");
+  if (landingThemeToggle) {
+    landingThemeToggle.addEventListener("click", toggleTheme);
+  }
+
+  // Initial user setup: Landing page appears first
   if (currentUserAccount) {
-    showAppScreen();
     leetCodeUsername = PrepStorage.getLeetCodeUsername();
     gfgUsername = PrepStorage.getGfgUsername() || leetCodeUsername;
     if (gfgUsername && !PrepStorage.getGfgUsername()) {
       PrepStorage.setGfgUsername(gfgUsername);
     }
-  } else {
-    showAuthScreen();
-    switchAuthMode("login");
   }
 
+  showLandingScreen();
   renderAll();
 }
 
