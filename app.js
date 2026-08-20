@@ -16,6 +16,24 @@ const GFG_API_ENDPOINTS = [
   "https://gfg-stats.tashif.codes"
 ];
 
+function applyTheme(theme) {
+  let isDark = theme === "dark";
+  document.body.classList.toggle("theme-dark", isDark);
+  let toggle = document.getElementById("theme-toggle");
+  let icon = document.getElementById("theme-icon");
+  if (!toggle || !icon) return;
+
+  icon.textContent = isDark ? "☀️" : "🌙";
+  toggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+  toggle.title = isDark ? "Switch to light mode" : "Switch to dark mode";
+}
+
+function toggleTheme() {
+  let nextTheme = PrepStorage.getTheme() === "dark" ? "light" : "dark";
+  PrepStorage.setTheme(nextTheme);
+  applyTheme(nextTheme);
+}
+
 // Helper function to escape HTML special characters
 function escapeHtml(text) {
   if (text === null || text === undefined) {
@@ -443,7 +461,7 @@ function renderLeetCodeProgress() {
   }
 
   let query = new URLSearchParams({
-    theme: "light",
+    theme: document.body.classList.contains("theme-dark") ? "dark" : "light",
     font: "Outfit",
     ext: "heatmap"
   });
@@ -542,6 +560,13 @@ async function fetchGfgUser(username) {
 
 // Generate GeeksforGeeks SVG Card with 52-week heatmap
 function generateGfgHeatmapSvg(username, stats, heatmap) {
+  let isDarkTheme = document.body.classList.contains("theme-dark");
+  let svgInk = isDarkTheme ? "#F1F5F2" : "#16211D";
+  let svgSoft = isDarkTheme ? "#AAB8B0" : "#718096";
+  let svgMuted = isDarkTheme ? "#34433C" : "#edf2f7";
+  let svgLine = isDarkTheme ? "#34433C" : "#edf0ed";
+  let svgCard = isDarkTheme ? "#1B2521" : "#ffffff";
+
   let easyCount = Number(stats?.byDifficulty?.easy) || 0;
   let mediumCount = Number(stats?.byDifficulty?.medium) || 0;
   let hardCount = Number(stats?.byDifficulty?.hard) || 0;
@@ -631,13 +656,13 @@ function generateGfgHeatmapSvg(username, stats, heatmap) {
           <stop offset="100%" stop-color="#f59e0b"/>
         </linearGradient>
       </defs>
-      <rect width="500" height="295" rx="10" fill="#ffffff"/>
+      <rect width="500" height="295" rx="10" fill="${svgCard}"/>
       
       <!-- Header -->
       <g transform="translate(24, 18)">
         <rect x="0" y="3" width="26" height="26" rx="6" fill="#2f8d46"/>
         <path d="M7 16 C7 11 11 11 11 11 M7 16 C7 21 11 21 11 21 M19 16 C19 11 15 11 15 11 M19 16 C19 21 15 21 15 21" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round"/>
-        <text x="34" y="23" fill="#16211d" font-family="'IBM Plex Sans', -apple-system, sans-serif" font-size="18" font-weight="700">${escapeHtml(username)}</text>
+        <text x="34" y="23" fill="${svgInk}" font-family="'IBM Plex Sans', -apple-system, sans-serif" font-size="18" font-weight="700">${escapeHtml(username)}</text>
         <text x="452" y="22" text-anchor="end" fill="#2f8d46" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="600">${escapeHtml(streakLabel)}</text>
       </g>
 
@@ -645,47 +670,47 @@ function generateGfgHeatmapSvg(username, stats, heatmap) {
       <g transform="translate(24, 58)">
         <!-- Solved Ring -->
         <g transform="translate(42, 45)">
-          <circle cx="0" cy="0" r="38" fill="none" stroke="#e6ece8" stroke-width="6.5"/>
+          <circle cx="0" cy="0" r="38" fill="none" stroke="${svgLine}" stroke-width="6.5"/>
           <circle cx="0" cy="0" r="38" fill="none" stroke="url(#gfgRing)" stroke-width="6.5" stroke-dasharray="238.7" stroke-dashoffset="${ringOffset}" stroke-linecap="round" transform="rotate(-90)"/>
-          <text x="0" y="7" text-anchor="middle" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="22" font-weight="700">${actualTotal}</text>
-          <text x="0" y="21" text-anchor="middle" fill="#718096" font-family="'IBM Plex Sans', sans-serif" font-size="9" font-weight="600" letter-spacing="0.5">SOLVED</text>
+          <text x="0" y="7" text-anchor="middle" fill="${svgInk}" font-family="'IBM Plex Sans', sans-serif" font-size="22" font-weight="700">${actualTotal}</text>
+          <text x="0" y="21" text-anchor="middle" fill="${svgSoft}" font-family="'IBM Plex Sans', sans-serif" font-size="9" font-weight="600" letter-spacing="0.5">SOLVED</text>
         </g>
 
         <!-- Difficulty Rows -->
         <g transform="translate(118, 12)">
           <!-- Easy -->
-          <text x="0" y="11" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Easy</text>
+          <text x="0" y="11" fill="${svgInk}" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Easy</text>
           <text x="334" y="11" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${easyCount} <tspan fill="#a0aec0">${basicCount ? `(+${basicCount} basic)` : ""}</tspan></text>
-          <rect x="0" y="17" width="334" height="4" rx="2" fill="#edf2f7"/>
+          <rect x="0" y="17" width="334" height="4" rx="2" fill="${svgMuted}"/>
           <rect x="0" y="17" width="${easyWidth}" height="4" rx="2" fill="#2f8d46"/>
 
           <!-- Medium -->
-          <text x="0" y="42" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Medium</text>
+          <text x="0" y="42" fill="${svgInk}" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Medium</text>
           <text x="334" y="42" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${mediumCount}</text>
-          <rect x="0" y="48" width="334" height="4" rx="2" fill="#edf2f7"/>
+          <rect x="0" y="48" width="334" height="4" rx="2" fill="${svgMuted}"/>
           <rect x="0" y="48" width="${mediumWidth}" height="4" rx="2" fill="#d97706"/>
 
           <!-- Hard -->
-          <text x="0" y="73" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Hard</text>
+          <text x="0" y="73" fill="${svgInk}" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Hard</text>
           <text x="334" y="73" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${hardCount}</text>
-          <rect x="0" y="79" width="334" height="4" rx="2" fill="#edf2f7"/>
+          <rect x="0" y="79" width="334" height="4" rx="2" fill="${svgMuted}"/>
           <rect x="0" y="79" width="${hardWidth}" height="4" rx="2" fill="#dc2626"/>
         </g>
       </g>
 
       <!-- Divider -->
-      <line x1="24" y1="168" x2="476" y2="168" stroke="#edf0ed" stroke-width="1"/>
+      <line x1="24" y1="168" x2="476" y2="168" stroke="${svgLine}" stroke-width="1"/>
 
       <!-- Heatmap Header -->
-      <text x="24" y="196" fill="#16211d" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Live Activity Heatmap (52 Weeks)</text>
+      <text x="24" y="196" fill="${svgInk}" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Live Activity Heatmap (52 Weeks)</text>
       <text x="476" y="196" text-anchor="end" fill="#2f8d46" font-family="'IBM Plex Mono', monospace" font-size="11" font-weight="600">${totalSubmissions} Submissions · ${totalActiveDays} Active Days</text>
 
       <!-- Heatmap Grid -->
       ${rectsHtml}
 
       <!-- Dates -->
-      <text x="24" y="284" fill="#718096" font-family="'IBM Plex Mono', monospace" font-size="10">${startStr}</text>
-      <text x="476" y="284" text-anchor="end" fill="#718096" font-family="'IBM Plex Mono', monospace" font-size="10">${endStr}</text>
+      <text x="24" y="284" fill="${svgSoft}" font-family="'IBM Plex Mono', monospace" font-size="10">${startStr}</text>
+      <text x="476" y="284" text-anchor="end" fill="${svgSoft}" font-family="'IBM Plex Mono', monospace" font-size="10">${endStr}</text>
     </svg>
   `;
 }
@@ -1510,6 +1535,8 @@ function renderAll() {
 
 // Initialize page and attach event listeners
 function initialize() {
+  applyTheme(PrepStorage.getTheme());
+
   let identityInput = document.getElementById("identity-input");
   let currentUserAccount = getCurrentAccount();
 
@@ -1567,6 +1594,7 @@ function initialize() {
   document.getElementById("login-form").addEventListener("submit", handleLogin);
   document.getElementById("signup-form").addEventListener("submit", handleSignup);
   document.getElementById("logout-button").addEventListener("click", handleLogout);
+  document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 
   document.getElementById("leetcode-form").addEventListener("submit", function (e) {
     e.preventDefault();
