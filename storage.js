@@ -13,7 +13,8 @@ const PrepStorage = (function () {
     theme: "prepLoop.theme",
     leetCodeProfiles: "prepLoop.leetCodeProfiles",
     gfgProfiles: "prepLoop.gfgProfiles",
-    gfgCache: "prepLoop.gfgCache"
+    gfgCache: "prepLoop.gfgCache",
+    csCoreProgress: "prepLoop.csCoreProgress"
   };
 
   // Helper to safely read JSON from localStorage
@@ -172,6 +173,78 @@ const PrepStorage = (function () {
     writeJSON(KEYS.gfgCache, nextCache);
   }
 
+  // CS Core Sheets Progress (Striver's CN, DBMS, OS)
+  function getCsUserKey() {
+    let account = getCurrentUser();
+    if (account && (account.id || account.email)) {
+      return String(account.id || account.email);
+    }
+    let who = getWhoami();
+    return who ? `whoami_${who}` : "guest_user";
+  }
+
+  function getCsCoreProgress() {
+    let userKey = getCsUserKey();
+    let allProgress = readJSON(KEYS.csCoreProgress, {});
+    return allProgress && typeof allProgress === "object" && allProgress[userKey]
+      ? allProgress[userKey]
+      : {};
+  }
+
+  function setCsCoreProgress(progressMap) {
+    let userKey = getCsUserKey();
+    let allProgress = readJSON(KEYS.csCoreProgress, {});
+    let nextProgress = allProgress && typeof allProgress === "object" ? allProgress : {};
+    nextProgress[userKey] = progressMap || {};
+    writeJSON(KEYS.csCoreProgress, nextProgress);
+  }
+
+  function toggleCsTopicComplete(topicId) {
+    let progress = getCsCoreProgress();
+    let current = progress[topicId] || {};
+    let isCompleted = !current.completed;
+    progress[topicId] = {
+      ...current,
+      completed: isCompleted,
+      completedAt: isCompleted ? Date.now() : null
+    };
+    setCsCoreProgress(progress);
+    return isCompleted;
+  }
+
+  function toggleCsTopicBookmark(topicId) {
+    let progress = getCsCoreProgress();
+    let current = progress[topicId] || {};
+    let isBookmarked = !current.bookmarked;
+    progress[topicId] = {
+      ...current,
+      bookmarked: isBookmarked
+    };
+    setCsCoreProgress(progress);
+    return isBookmarked;
+  }
+
+  function saveCsTopicNotes(topicId, notes) {
+    let progress = getCsCoreProgress();
+    let current = progress[topicId] || {};
+    progress[topicId] = {
+      ...current,
+      notes: String(notes || "")
+    };
+    setCsCoreProgress(progress);
+  }
+
+  function linkCsTopicToSm2(topicId, sm2QuestionId) {
+    let progress = getCsCoreProgress();
+    let current = progress[topicId] || {};
+    progress[topicId] = {
+      ...current,
+      sm2Id: sm2QuestionId,
+      lastReviewed: new Date().toISOString().split("T")[0]
+    };
+    setCsCoreProgress(progress);
+  }
+
   // Generate Unique ID
   function uid() {
     if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -201,6 +274,13 @@ const PrepStorage = (function () {
     setGfgUsername: setGfgUsername,
     getGfgCache: getGfgCache,
     setGfgCache: setGfgCache,
+    getCsCoreProgress: getCsCoreProgress,
+    setCsCoreProgress: setCsCoreProgress,
+    toggleCsTopicComplete: toggleCsTopicComplete,
+    toggleCsTopicBookmark: toggleCsTopicBookmark,
+    saveCsTopicNotes: saveCsTopicNotes,
+    linkCsTopicToSm2: linkCsTopicToSm2,
     uid: uid
   };
 })();
+
