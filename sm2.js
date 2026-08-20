@@ -63,6 +63,7 @@ const SM2 = (function () {
     return {
       id: question.id,
       topic: question.topic,
+      tag: question.tag || "DSA",
       difficulty: question.difficulty,
       easeFactor: easeFactor,
       interval: interval,
@@ -77,6 +78,7 @@ const SM2 = (function () {
     let initialQuestion = {
       id: params.id,
       topic: params.topic,
+      tag: params.tag || "DSA",
       difficulty: params.difficulty,
       easeFactor: 2.5,
       interval: 0,

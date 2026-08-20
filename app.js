@@ -91,6 +91,15 @@ function getDifficultyPill(difficulty) {
   return `<span class="pill ${difficulty}">${escapeHtml(difficulty)}</span>`;
 }
 
+// Helper to render subject/topic tag badge (DSA, DBMS, CN, OS)
+function getTagPill(tag) {
+  let cleanTag = String(tag || "DSA").trim().toUpperCase();
+  if (!["DSA", "DBMS", "CN", "OS"].includes(cleanTag)) {
+    cleanTag = "DSA";
+  }
+  return `<span class="tag-pill tag-${cleanTag.toLowerCase()}">${escapeHtml(cleanTag)}</span>`;
+}
+
 // Helper to format date as YYYY.M.D
 function formatDateDot(date) {
   let year = date.getFullYear();
@@ -1120,6 +1129,7 @@ function addCsTopicToSm2(topicId) {
     let newQ = SM2.newQuestion({
       id: questionId,
       topic: topic.title,
+      tag: topic.subject ? topic.subject.toUpperCase() : "DSA",
       difficulty: topic.difficulty,
       correct: true,
       timeTaken: 15
@@ -1163,7 +1173,7 @@ function renderDashboard() {
         <div class="list-row">
           <div class="list-primary">
             <span>${escapeHtml(item.topic)}</span>
-            <div class="list-meta">EF ${ef} · ${escapeHtml(item.difficulty)}</div>
+            <div class="list-meta">${getTagPill(item.tag || "DSA")} · EF ${ef} · ${escapeHtml(item.difficulty)}</div>
           </div>
           ${getDifficultyPill(item.difficulty)}
         </div>
@@ -1188,53 +1198,44 @@ function renderDashboard() {
         return s.id === booking.slotId;
       });
 
-      if (slot && slot.day === currentDay) {
-        let isHost = Scheduler.samePerson(slot.hostName, currentUser);
-        let isRequester = Scheduler.samePerson(booking.requesterName, currentUser);
+      if (!slot || slot.day !== currentDay) continue;
 
-        if (isHost || isRequester) {
-          todaySessions.push({ booking: booking, slot: slot });
-        }
+      let isHost = Scheduler.samePerson(slot.hostName, currentUser);
+      let isRequester = Scheduler.samePerson(booking.requesterName, currentUser);
+
+      if (isHost || isRequester) {
+        todaySessions.push({
+          booking: booking,
+          slot: slot,
+          role: isHost ? "Host" : "Requester",
+          otherPerson: isHost ? booking.requesterName : slot.hostName
+        });
       }
     }
   }
 
   document.getElementById("sessions-count").textContent = todaySessions.length;
-
   let sessionsListHtml = "";
   if (todaySessions.length > 0) {
-    todaySessions.sort(function (a, b) {
-      return Scheduler.timeToMinutes(a.slot.time) - Scheduler.timeToMinutes(b.slot.time);
-    });
-
     for (let i = 0; i < todaySessions.length; i++) {
       let item = todaySessions[i];
-      let isHost = Scheduler.samePerson(item.slot.hostName, currentUser);
-      let otherPerson = isHost ? item.booking.requesterName : item.slot.hostName;
-      let roleText = isHost ? "hosting" : "attending";
-      let badgeText = isHost ? "host" : "guest";
       let displayTime = Scheduler.formatDisplayTime(item.slot.time);
-
       sessionsListHtml += `
         <div class="list-row">
           <div class="list-primary">
-            <span>${escapeHtml(displayTime)} with ${escapeHtml(otherPerson)}</span>
-            <div class="list-meta">${roleText}${item.slot.topic ? ` · ${escapeHtml(item.slot.topic)}` : ""}</div>
+            <span>${escapeHtml(displayTime)} — with ${escapeHtml(item.otherPerson)}</span>
+            <div class="list-meta">${item.role} · ${escapeHtml(item.booking.status)}</div>
           </div>
-          <span class="status-word">${badgeText}</span>
+          <span class="pill ${item.booking.status}">${escapeHtml(item.booking.status)}</span>
         </div>
       `;
     }
   } else {
-    sessionsListHtml = getEmptyState(
-      currentUser
-        ? "No sessions today. Book one from the Schedule tab."
-        : "Add your name above to see your sessions."
-    );
+    sessionsListHtml = getEmptyState("No sessions scheduled for today.");
   }
   document.getElementById("sessions-list").innerHTML = sessionsListHtml;
 
-  // 4. Platform cards
+  // 4. Platform Progress Cards
   renderLeetCodeProgress();
   renderGfgProgress();
 }
@@ -1263,10 +1264,12 @@ function renderQuestions() {
     let dueClass = isDue ? "due-date" : "";
     let dueTag = isDue ? " · due" : "";
     let attemptsCount = Array.isArray(q.history) ? q.history.length : 0;
+    let tagPill = getTagPill(q.tag || "DSA");
 
     rowsHtml += `
       <tr>
         <td class="topic-cell">${escapeHtml(q.topic)}</td>
+        <td>${tagPill}</td>
         <td>${getDifficultyPill(q.difficulty)}</td>
         <td class="mono">${ease}</td>
         <td class="mono">${q.interval}d</td>
@@ -1282,6 +1285,7 @@ function renderQuestions() {
         <thead>
           <tr>
             <th>Topic</th>
+            <th>Tag</th>
             <th>Difficulty</th>
             <th>Ease</th>
             <th>Interval</th>
@@ -1303,6 +1307,7 @@ function onQuestionSubmit(event) {
 
   let form = event.target;
   let topic = form.elements["topic"].value.trim();
+  let tag = form.elements["tag"] ? form.elements["tag"].value : "DSA";
   let difficulty = form.elements["difficulty"].value;
   let timeTaken = Number(form.elements["timeTaken"].value);
   let outcome = form.elements["outcome"].value;
@@ -1323,22 +1328,27 @@ function onQuestionSubmit(event) {
   }
 
   if (existingIndex >= 0) {
-    questions[existingIndex] = SM2.recalculate(questions[existingIndex], isCorrect, timeTaken);
-    showToast(`Attempt added to “${topic}”.`);
+    let existing = questions[existingIndex];
+    if (tag) existing.tag = tag;
+    if (difficulty) existing.difficulty = difficulty;
+    questions[existingIndex] = SM2.recalculate(existing, isCorrect, timeTaken);
+    showToast(`Attempt added to “${topic}” [${tag}].`);
   } else {
     let newQ = SM2.newQuestion({
       id: PrepStorage.uid(),
       topic: topic,
+      tag: tag,
       difficulty: difficulty,
       correct: isCorrect,
       timeTaken: timeTaken
     });
     questions.push(newQ);
-    showToast(`“${topic}” added to your review queue.`);
+    showToast(`“${topic}” [${tag}] added to your review queue.`);
   }
 
   PrepStorage.setQuestions(questions);
   form.reset();
+  if (form.elements["tag"]) form.elements["tag"].value = "DSA";
   form.elements["difficulty"].value = "medium";
   form.elements["outcome"].value = "solved";
 
