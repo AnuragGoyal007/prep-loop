@@ -862,6 +862,277 @@ function refreshGfgProgress(username) {
   showToast("Refreshing live GFG data...");
 }
 
+// CS Core Sheets State (Striver's CN, DBMS, OS)
+let csCurrentSubject = "all";
+let csCurrentStatus = "all";
+let csCurrentDifficulty = "all";
+let csSearchQuery = "";
+let openNotesDrawerId = null;
+
+// Render CS Core readiness widget on Dashboard
+function renderDashboardCsProgress() {
+  let progressContainer = document.getElementById("dashboard-cs-progress");
+  if (!progressContainer || typeof CS_SHEETS_DATA === "undefined") return;
+
+  let allTopics = CS_SHEETS_DATA.getAllTopics();
+  let progressMap = PrepStorage.getCsCoreProgress();
+
+  let subjects = CS_SHEETS_DATA.getSubjects();
+  let totalTopics = allTopics.length;
+  let totalCompleted = allTopics.filter(function (t) {
+    return progressMap[t.id] && progressMap[t.id].completed;
+  }).length;
+
+  let overallPct = totalTopics > 0 ? Math.round((totalCompleted / totalTopics) * 100) : 0;
+
+  let subjectBarsHtml = "";
+  subjects.forEach(function (subj) {
+    let subjTopics = CS_SHEETS_DATA.getTopicsBySubject(subj.id);
+    let done = subjTopics.filter(function (t) {
+      return progressMap[t.id] && progressMap[t.id].completed;
+    }).length;
+    let pct = subjTopics.length > 0 ? Math.round((done / subjTopics.length) * 100) : 0;
+
+    subjectBarsHtml += `
+      <div class="dash-cs-subject-row">
+        <div class="dash-cs-subject-meta">
+          <span class="dash-cs-name">${subj.icon} ${subj.name}</span>
+          <span class="dash-cs-stat font-mono">${done}/${subjTopics.length} (${pct}%)</span>
+        </div>
+        <div class="cs-progress-bar-bg small"><div class="cs-progress-bar-fill ${subj.id}" style="width:${pct}%"></div></div>
+      </div>
+    `;
+  });
+
+  let topAskedRemaining = allTopics.filter(function (t) {
+    return t.isHighFrequency && !(progressMap[t.id] && progressMap[t.id].completed);
+  }).length;
+
+  progressContainer.innerHTML = `
+    <div class="dash-cs-summary-layout">
+      <div class="dash-cs-score-box">
+        <div class="dash-cs-big-num font-mono">${overallPct}%</div>
+        <span class="dash-cs-score-label">Core CS Readiness</span>
+        <span class="dash-cs-score-sub">${totalCompleted} of ${totalTopics} concepts mastered</span>
+        ${topAskedRemaining > 0 ? `<div class="dash-cs-hot-alert">🔥 ${topAskedRemaining} top-asked topics remaining</div>` : '<div class="dash-cs-hot-alert done">🎉 All top topics completed!</div>'}
+      </div>
+      <div class="dash-cs-bars-box">
+        ${subjectBarsHtml}
+      </div>
+    </div>
+  `;
+}
+
+// Render CS Core tab
+function renderCsCore() {
+  if (typeof CS_SHEETS_DATA === "undefined") return;
+
+  let allTopics = CS_SHEETS_DATA.getAllTopics();
+  let progressMap = PrepStorage.getCsCoreProgress();
+  let questions = PrepStorage.getQuestions();
+
+  // 1. Calculate stats per subject
+  let subjects = CS_SHEETS_DATA.getSubjects();
+  subjects.forEach(function (subj) {
+    let subjTopics = CS_SHEETS_DATA.getTopicsBySubject(subj.id);
+    let completedCount = subjTopics.filter(function (t) {
+      return progressMap[t.id] && progressMap[t.id].completed;
+    }).length;
+    let pct = subjTopics.length > 0 ? Math.round((completedCount / subjTopics.length) * 100) : 0;
+
+    let pctElem = document.getElementById(`cs-${subj.id}-pct`);
+    let barElem = document.getElementById(`cs-${subj.id}-bar`);
+    let countElem = document.getElementById(`cs-${subj.id}-count`);
+    let tabCountElem = document.getElementById(`count-${subj.id}`);
+
+    if (pctElem) pctElem.textContent = `${pct}%`;
+    if (barElem) barElem.style.width = `${pct}%`;
+    if (countElem) countElem.textContent = `${completedCount} / ${subjTopics.length} completed`;
+    if (tabCountElem) tabCountElem.textContent = subjTopics.length;
+  });
+
+  let allTabCount = document.getElementById("count-all");
+  if (allTabCount) allTabCount.textContent = allTopics.length;
+
+  // 2. Filter topics
+  let filtered = allTopics.filter(function (topic) {
+    if (csCurrentSubject !== "all" && topic.subject !== csCurrentSubject) {
+      return false;
+    }
+
+    let p = progressMap[topic.id] || {};
+    if (csCurrentStatus === "completed" && !p.completed) return false;
+    if (csCurrentStatus === "pending" && p.completed) return false;
+    if (csCurrentStatus === "bookmarked" && !p.bookmarked) return false;
+    if (csCurrentStatus === "top-asked" && !topic.isHighFrequency) return false;
+
+    if (csCurrentDifficulty !== "all" && topic.difficulty !== csCurrentDifficulty) {
+      return false;
+    }
+
+    if (csSearchQuery) {
+      let q = csSearchQuery.toLowerCase();
+      let matchTitle = topic.title.toLowerCase().includes(q);
+      let matchCat = topic.category.toLowerCase().includes(q);
+      let matchDesc = topic.description.toLowerCase().includes(q);
+      let matchKey = (topic.keyTakeaways || "").toLowerCase().includes(q);
+      if (!matchTitle && !matchCat && !matchDesc && !matchKey) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  let resultsCountElem = document.getElementById("cs-results-count");
+  if (resultsCountElem) {
+    resultsCountElem.textContent = `Showing ${filtered.length} of ${allTopics.length} topics`;
+  }
+
+  let container = document.getElementById("cs-topics-container");
+  if (!container) return;
+
+  if (filtered.length === 0) {
+    container.innerHTML = getEmptyState("No matching CS topics found for your filters. Try clearing filters or search keywords.");
+    return;
+  }
+
+  // 3. Group by category
+  let categoriesMap = new Map();
+  filtered.forEach(function (topic) {
+    let groupKey = `${topic.subject.toUpperCase()} • ${topic.category}`;
+    if (!categoriesMap.has(groupKey)) {
+      categoriesMap.set(groupKey, []);
+    }
+    categoriesMap.get(groupKey).push(topic);
+  });
+
+  let html = "";
+  categoriesMap.forEach(function (topicsInCat, groupName) {
+    let catCompleted = topicsInCat.filter(function (t) {
+      return progressMap[t.id] && progressMap[t.id].completed;
+    }).length;
+    let catTotal = topicsInCat.length;
+
+    html += `
+      <div class="cs-category-group">
+        <div class="cs-category-header">
+          <h3>${escapeHtml(groupName)}</h3>
+          <span class="cs-category-progress">${catCompleted}/${catTotal} completed</span>
+        </div>
+        <div class="cs-topics-list">
+    `;
+
+    topicsInCat.forEach(function (topic) {
+      let p = progressMap[topic.id] || {};
+      let isCompleted = Boolean(p.completed);
+      let isBookmarked = Boolean(p.bookmarked);
+      let notes = p.notes || "";
+      let hasNotes = Boolean(notes.trim());
+      let isOpenNotes = openNotesDrawerId === topic.id;
+
+      // Check if synced in SM-2 queue
+      let sm2Q = questions.find(function (q) {
+        return (p.sm2Id && q.id === p.sm2Id) || (q.topic.toLowerCase().trim() === topic.title.toLowerCase().trim());
+      });
+
+      let sm2BadgeHtml = sm2Q
+        ? `<button class="cs-sm2-badge in-queue" type="button" data-go="questions" title="Synced in Spaced Repetition (Interval: ${sm2Q.interval}d, Next: ${sm2Q.nextReviewDate})">🧠 In Loop (${sm2Q.interval}d)</button>`
+        : `<button class="cs-sm2-badge add-queue" type="button" data-cs-add-sm2="${topic.id}" title="Add to Spaced Repetition queue for adaptive review">+ Add to Loop</button>`;
+
+      let hotBadgeHtml = topic.isHighFrequency
+        ? `<span class="cs-hot-badge" title="High Frequency Interview Question">🔥 Top Asked</span>`
+        : "";
+
+      let subjectBadgeHtml = `<span class="cs-subject-pill-tag ${topic.subject}">${topic.subject.toUpperCase()}</span>`;
+
+      html += `
+        <div class="cs-topic-card ${isCompleted ? "is-completed" : ""}" id="topic-card-${topic.id}">
+          <div class="cs-topic-main">
+            <label class="cs-checkbox-wrap" title="Mark as completed">
+              <input type="checkbox" class="cs-topic-checkbox" data-cs-toggle="${topic.id}" ${isCompleted ? "checked" : ""} />
+              <span class="cs-checkbox-custom"></span>
+            </label>
+
+            <div class="cs-topic-content">
+              <div class="cs-topic-title-row">
+                <h4 class="cs-topic-title ${isCompleted ? "is-crossed" : ""}">${escapeHtml(topic.title)}</h4>
+                <div class="cs-topic-tags">
+                  ${subjectBadgeHtml}
+                  ${getDifficultyPill(topic.difficulty)}
+                  ${hotBadgeHtml}
+                </div>
+              </div>
+
+              <div class="cs-topic-desc">
+                <p>${escapeHtml(topic.description)}</p>
+                <div class="cs-takeaway"><strong>Key Concept:</strong> ${escapeHtml(topic.keyTakeaways)}</div>
+              </div>
+            </div>
+
+            <div class="cs-topic-actions">
+              <button type="button" class="cs-icon-btn bookmark-btn ${isBookmarked ? "is-active" : ""}" data-cs-bookmark="${topic.id}" title="${isBookmarked ? "Remove bookmark" : "Bookmark this topic"}">
+                ${isBookmarked ? "★" : "☆"}
+              </button>
+              <button type="button" class="cs-icon-btn notes-btn ${hasNotes ? "has-notes" : ""} ${isOpenNotes ? "is-active" : ""}" data-cs-notes-toggle="${topic.id}" title="Open revision notes">
+                📝${hasNotes ? '<span class="notes-dot"></span>' : ''}
+              </button>
+              ${sm2BadgeHtml}
+            </div>
+          </div>
+
+          <div class="cs-notes-drawer ${isOpenNotes ? "is-open" : ""}" id="cs-notes-${topic.id}" ${isOpenNotes ? "" : "hidden"}>
+            <div class="cs-notes-inner">
+              <label for="notes-input-${topic.id}"><strong>Revision Notes</strong> for <em>${escapeHtml(topic.title)}</em>:</label>
+              <textarea id="notes-input-${topic.id}" data-cs-notes-input="${topic.id}" placeholder="Write key formulas, interview traps, or memory mnemonics...">${escapeHtml(notes)}</textarea>
+              <div class="cs-notes-actions">
+                <button type="button" class="button slate-button cs-save-notes-btn" data-cs-save-notes="${topic.id}">Save Notes</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+
+    html += `
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+// 1-Click Sync topic with Spaced Repetition (SM-2)
+function addCsTopicToSm2(topicId) {
+  if (typeof CS_SHEETS_DATA === "undefined") return;
+  let topic = CS_SHEETS_DATA.getTopicById(topicId);
+  if (!topic) return;
+
+  let questions = PrepStorage.getQuestions();
+  let existing = questions.find(function (q) {
+    return q.topic.toLowerCase().trim() === topic.title.toLowerCase().trim();
+  });
+
+  let questionId = existing ? existing.id : PrepStorage.uid();
+
+  if (!existing) {
+    let newQ = SM2.newQuestion({
+      id: questionId,
+      topic: topic.title,
+      difficulty: topic.difficulty,
+      correct: true,
+      timeTaken: 15
+    });
+    questions.push(newQ);
+    PrepStorage.setQuestions(questions);
+  }
+
+  PrepStorage.linkCsTopicToSm2(topicId, questionId);
+  showToast(`“${topic.title}” synced with Spaced Repetition review loop!`);
+  renderAll();
+}
+
 // Render dashboard tab contents
 function renderDashboard() {
   let questions = PrepStorage.getQuestions();
@@ -872,7 +1143,10 @@ function renderDashboard() {
   // 1. Profile card
   renderProfileCard(questions, bookings, slots);
 
-  // 2. Due questions
+  // 2. CS Core Readiness widget
+  renderDashboardCsProgress();
+
+  // 3. Due questions
   let dueQuestions = questions.filter(function (q) {
     return q.nextReviewDate <= todayDate;
   }).sort(function (a, b) {
@@ -1586,6 +1860,7 @@ function switchTab(tabName) {
 function renderAll() {
   renderDashboard();
   renderQuestions();
+  renderCsCore();
   renderSchedule();
 }
 
@@ -1645,6 +1920,124 @@ function initialize() {
       switchAuthMode(tab.getAttribute("data-auth-tab"));
     });
   });
+
+  // CS Core: Subject filter tabs
+  document.querySelectorAll("[data-cs-subject]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      let subj = btn.getAttribute("data-cs-subject");
+      csCurrentSubject = subj;
+      document.querySelectorAll("[data-cs-subject]").forEach(function (b) {
+        b.classList.toggle("is-active", b.getAttribute("data-cs-subject") === subj);
+      });
+      renderCsCore();
+    });
+  });
+
+  // CS Core: Subject overview summary card clicks
+  document.querySelectorAll("[data-filter-subject]").forEach(function (card) {
+    card.addEventListener("click", function () {
+      let subj = card.getAttribute("data-filter-subject");
+      csCurrentSubject = subj;
+      document.querySelectorAll("[data-cs-subject]").forEach(function (b) {
+        b.classList.toggle("is-active", b.getAttribute("data-cs-subject") === subj);
+      });
+      switchTab("cs-core");
+      let toolbar = document.querySelector(".cs-toolbar-card");
+      if (toolbar) toolbar.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  // CS Core: Status filter chips
+  document.querySelectorAll("[data-cs-status]").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      let status = chip.getAttribute("data-cs-status");
+      csCurrentStatus = status;
+      document.querySelectorAll("[data-cs-status]").forEach(function (c) {
+        c.classList.toggle("is-active", c.getAttribute("data-cs-status") === status);
+      });
+      renderCsCore();
+    });
+  });
+
+  // CS Core: Difficulty filter
+  let diffSelect = document.getElementById("cs-difficulty-select");
+  if (diffSelect) {
+    diffSelect.addEventListener("change", function () {
+      csCurrentDifficulty = diffSelect.value;
+      renderCsCore();
+    });
+  }
+
+  // CS Core: Search input
+  let searchInput = document.getElementById("cs-search-input");
+  if (searchInput) {
+    searchInput.addEventListener("input", function () {
+      csSearchQuery = searchInput.value.trim();
+      renderCsCore();
+    });
+  }
+
+  // CS Core: Topics container event delegation
+  let csTopicsContainer = document.getElementById("cs-topics-container");
+  if (csTopicsContainer) {
+    csTopicsContainer.addEventListener("click", function (event) {
+      // Toggle complete checkbox
+      let checkInput = event.target.closest("[data-cs-toggle]");
+      if (checkInput) {
+        let topicId = checkInput.getAttribute("data-cs-toggle");
+        let isDone = PrepStorage.toggleCsTopicComplete(topicId);
+        let topicObj = typeof CS_SHEETS_DATA !== "undefined" ? CS_SHEETS_DATA.getTopicById(topicId) : null;
+        showToast(isDone ? `Marked “${topicObj ? topicObj.title : "topic"}” as completed!` : `Marked “${topicObj ? topicObj.title : "topic"}” as pending.`);
+        renderAll();
+        return;
+      }
+
+      // Bookmark button
+      let bookmarkBtn = event.target.closest("[data-cs-bookmark]");
+      if (bookmarkBtn) {
+        let topicId = bookmarkBtn.getAttribute("data-cs-bookmark");
+        let isMarked = PrepStorage.toggleCsTopicBookmark(topicId);
+        let topicObj = typeof CS_SHEETS_DATA !== "undefined" ? CS_SHEETS_DATA.getTopicById(topicId) : null;
+        showToast(isMarked ? `★ Bookmarked “${topicObj ? topicObj.title : "topic"}”` : `Removed bookmark from “${topicObj ? topicObj.title : "topic"}”`);
+        renderCsCore();
+        return;
+      }
+
+      // Notes toggle button
+      let notesBtn = event.target.closest("[data-cs-notes-toggle]");
+      if (notesBtn) {
+        let topicId = notesBtn.getAttribute("data-cs-notes-toggle");
+        openNotesDrawerId = openNotesDrawerId === topicId ? null : topicId;
+        renderCsCore();
+        if (openNotesDrawerId) {
+          let textarea = document.getElementById(`notes-input-${topicId}`);
+          if (textarea) textarea.focus();
+        }
+        return;
+      }
+
+      // Save notes button
+      let saveNotesBtn = event.target.closest("[data-cs-save-notes]");
+      if (saveNotesBtn) {
+        let topicId = saveNotesBtn.getAttribute("data-cs-save-notes");
+        let textarea = document.getElementById(`notes-input-${topicId}`);
+        let notesText = textarea ? textarea.value : "";
+        PrepStorage.saveCsTopicNotes(topicId, notesText);
+        showToast("Revision notes saved.");
+        openNotesDrawerId = null;
+        renderCsCore();
+        return;
+      }
+
+      // Add to Spaced Repetition (SM-2) button
+      let sm2Btn = event.target.closest("[data-cs-add-sm2]");
+      if (sm2Btn) {
+        let topicId = sm2Btn.getAttribute("data-cs-add-sm2");
+        addCsTopicToSm2(topicId);
+        return;
+      }
+    });
+  }
 
   // Forms
   document.getElementById("login-form").addEventListener("submit", handleLogin);
@@ -1829,3 +2222,4 @@ function initialize() {
 
 // Start application
 initialize();
+

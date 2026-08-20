@@ -264,6 +264,7 @@
         <nav class="tabs" aria-label="Main navigation" role="tablist">
           <button class="tab is-active" type="button" role="tab" aria-selected="true" aria-controls="dashboard" data-tab="dashboard">Dashboard</button>
           <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="questions" data-tab="questions">Questions</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="cs-core" data-tab="cs-core">CS Core</button>
           <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="schedule" data-tab="schedule">Schedule</button>
         </nav>
         <div class="utility-actions">
@@ -277,6 +278,19 @@
         <section id="dashboard" class="panel is-active" role="tabpanel">
           <div class="section-intro"><p class="eyebrow">Your preparation at a glance</p><h1>Keep the loop moving.</h1><p>Review what needs attention, then make time to practice with someone.</p></div>
           <section class="horizon-card profile-card" aria-labelledby="profile-title"><div id="profile-card" aria-live="polite"></div></section>
+          
+          <!-- CS Core Fundamentals Dashboard Card -->
+          <section class="card cs-readiness-card" aria-labelledby="cs-readiness-title">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">Striver's CS Sheets</p>
+                <h2 id="cs-readiness-title">Core Fundamentals Readiness</h2>
+              </div>
+              <button type="button" class="text-action" data-go="cs-core">Open Sheets &rarr;</button>
+            </div>
+            <div id="dashboard-cs-progress" class="dashboard-cs-progress" aria-live="polite"></div>
+          </section>
+
           <div class="dashboard-columns platform-row">
             <section class="card platform-card leetcode-card" aria-labelledby="leetcode-title">
               <div class="card-heading">
@@ -325,6 +339,92 @@
           <section class="card table-card" aria-labelledby="questions-title"><div class="card-heading"><div><p class="eyebrow">All questions</p><h2 id="questions-title">Your review queue</h2></div><span id="question-total" class="data-note">0 saved</span></div><div id="questions-table-wrap"></div></section>
         </section>
 
+        <section id="cs-core" class="panel" role="tabpanel" hidden>
+          <div class="section-intro"><p class="eyebrow">Striver's (takeUforward) Interview Sheets</p><h1>Master Core CS Fundamentals.</h1><p>Track high-frequency interview questions for Operating Systems, DBMS, and Computer Networks with built-in Spaced Repetition.</p></div>
+
+          <!-- Subject Summary Cards -->
+          <div class="cs-overview-grid">
+            <div class="cs-subject-summary-card is-os" data-filter-subject="os" role="button" tabindex="0" aria-label="Filter Operating Systems topics">
+              <div class="cs-subject-header">
+                <span class="cs-subject-badge os">OS</span>
+                <span class="cs-subject-pct" id="cs-os-pct">0%</span>
+              </div>
+              <h3>Operating Systems</h3>
+              <p class="cs-subject-desc">Processes, CPU Scheduling, Mutex & Semaphores, Deadlocks, Memory Paging.</p>
+              <div class="cs-progress-bar-bg"><div class="cs-progress-bar-fill os" id="cs-os-bar" style="width:0%"></div></div>
+              <div class="cs-subject-footer"><span id="cs-os-count">0 / 12 completed</span><span class="cs-view-link">View topics &rarr;</span></div>
+            </div>
+
+            <div class="cs-subject-summary-card is-dbms" data-filter-subject="dbms" role="button" tabindex="0" aria-label="Filter DBMS topics">
+              <div class="cs-subject-header">
+                <span class="cs-subject-badge dbms">DBMS</span>
+                <span class="cs-subject-pct" id="cs-dbms-pct">0%</span>
+              </div>
+              <h3>Database Systems</h3>
+              <p class="cs-subject-desc">ACID Properties, Normalization (1NF–BCNF), Indexing, 2PL, Joins & NoSQL.</p>
+              <div class="cs-progress-bar-bg"><div class="cs-progress-bar-fill dbms" id="cs-dbms-bar" style="width:0%"></div></div>
+              <div class="cs-subject-footer"><span id="cs-dbms-count">0 / 10 completed</span><span class="cs-view-link">View topics &rarr;</span></div>
+            </div>
+
+            <div class="cs-subject-summary-card is-cn" data-filter-subject="cn" role="button" tabindex="0" aria-label="Filter Computer Networks topics">
+              <div class="cs-subject-header">
+                <span class="cs-subject-badge cn">CN</span>
+                <span class="cs-subject-pct" id="cs-cn-pct">0%</span>
+              </div>
+              <h3>Computer Networks</h3>
+              <p class="cs-subject-desc">OSI & TCP/IP, TCP 3-Way Handshake, Congestion, Subnetting, DNS, HTTP/TLS.</p>
+              <div class="cs-progress-bar-bg"><div class="cs-progress-bar-fill cn" id="cs-cn-bar" style="width:0%"></div></div>
+              <div class="cs-subject-footer"><span id="cs-cn-count">0 / 10 completed</span><span class="cs-view-link">View topics &rarr;</span></div>
+            </div>
+          </div>
+
+          <!-- Filter & Search Toolbar Card -->
+          <section class="card cs-toolbar-card">
+            <div class="cs-toolbar-top">
+              <div class="cs-subject-pills" role="tablist" aria-label="Subject filter tabs">
+                <button type="button" class="cs-tab is-active" data-cs-subject="all">All Sheets <span class="cs-tab-count" id="count-all">32</span></button>
+                <button type="button" class="cs-tab" data-cs-subject="os">Operating Systems <span class="cs-tab-count" id="count-os">12</span></button>
+                <button type="button" class="cs-tab" data-cs-subject="dbms">DBMS <span class="cs-tab-count" id="count-dbms">10</span></button>
+                <button type="button" class="cs-tab" data-cs-subject="cn">Computer Networks <span class="cs-tab-count" id="count-cn">10</span></button>
+              </div>
+              <div class="cs-search-box">
+                <span class="search-icon" aria-hidden="true">🔍</span>
+                <input id="cs-search-input" type="search" placeholder="Search concepts, algorithms, questions..." aria-label="Search CS topics" />
+              </div>
+            </div>
+
+            <div class="cs-toolbar-bottom">
+              <div class="cs-status-filters" role="group" aria-label="Status filter chips">
+                <span class="filter-label">Filter:</span>
+                <button type="button" class="filter-chip is-active" data-cs-status="all">All</button>
+                <button type="button" class="filter-chip" data-cs-status="pending">Pending</button>
+                <button type="button" class="filter-chip" data-cs-status="completed">Completed</button>
+                <button type="button" class="filter-chip" data-cs-status="bookmarked">★ Bookmarked</button>
+                <button type="button" class="filter-chip hot-chip" data-cs-status="top-asked">🔥 Top Asked</button>
+              </div>
+              <div class="cs-difficulty-filters">
+                <label for="cs-difficulty-select">Difficulty:
+                  <select id="cs-difficulty-select">
+                    <option value="all">All levels</option>
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <!-- Topics List Section -->
+          <section class="cs-topics-section" aria-labelledby="cs-topics-heading">
+            <div class="cs-topics-heading-row">
+              <h2 id="cs-topics-heading" class="cs-section-title">Topic Checklist</h2>
+              <span id="cs-results-count" class="data-note">Showing 32 topics</span>
+            </div>
+            <div id="cs-topics-container" class="cs-topics-container" aria-live="polite"></div>
+          </section>
+        </section>
+
         <section id="schedule" class="panel" role="tabpanel" hidden>
           <div class="section-intro"><p class="eyebrow">Peer mock interviews</p><h1>Put practice on the calendar.</h1><p>Offer a session or book an open slot. You can select any custom time or click a grid cell directly.</p></div>
           <section class="offer-section">
@@ -367,6 +467,10 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="storage.js"></script><script src="sm2.js"></script><script src="scheduler.js"></script><script src="app.js"></script>
+    <script src="cs_sheets_data.js"></script>
+    <script src="storage.js"></script>
+    <script src="sm2.js"></script>
+    <script src="scheduler.js"></script>
+    <script src="app.js"></script>
   </body>
 </html>
