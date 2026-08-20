@@ -10,6 +10,7 @@ const PrepStorage = (function () {
     whoami: "prepLoop.whoami",
     users: "prepLoop.users",
     currentUser: "prepLoop.currentUser",
+    theme: "prepLoop.theme",
     leetCodeProfiles: "prepLoop.leetCodeProfiles",
     gfgProfiles: "prepLoop.gfgProfiles",
     gfgCache: "prepLoop.gfgCache"
@@ -108,6 +109,16 @@ const PrepStorage = (function () {
     localStorage.setItem(KEYS.currentUser, JSON.stringify(value));
   }
 
+  // Theme preference
+  function getTheme() {
+    let value = localStorage.getItem(KEYS.theme);
+    return value === "dark" ? "dark" : "light";
+  }
+
+  function setTheme(value) {
+    localStorage.setItem(KEYS.theme, value === "dark" ? "dark" : "light");
+  }
+
   // LeetCode Username
   function getLeetCodeUsername() {
     let account = getCurrentUser();
@@ -182,6 +193,8 @@ const PrepStorage = (function () {
     setUsers: setUsers,
     getCurrentUser: getCurrentUser,
     setCurrentUser: setCurrentUser,
+    getTheme: getTheme,
+    setTheme: setTheme,
     getLeetCodeUsername: getLeetCodeUsername,
     setLeetCodeUsername: setLeetCodeUsername,
     getGfgUsername: getGfgUsername,
