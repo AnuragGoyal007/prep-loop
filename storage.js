@@ -1,7 +1,3 @@
-// ============================================================
-// LocalStorage Persistence Layer for Prep Loop
-// ============================================================
-
 const PrepStorage = (function () {
   const KEYS = {
     questions: "prepLoop.questions",
@@ -17,7 +13,7 @@ const PrepStorage = (function () {
     csCoreProgress: "prepLoop.csCoreProgress"
   };
 
-  // Helper to safely read JSON from localStorage
+  // Safely parses and returns JSON from localStorage with a fallback
   function readJSON(key, fallback) {
     if (fallback === undefined) {
       fallback = [];
@@ -30,23 +26,23 @@ const PrepStorage = (function () {
     }
   }
 
-  // Helper to write JSON to localStorage
+  // Serializes and writes a value to localStorage
   function writeJSON(key, value) {
     localStorage.setItem(key, JSON.stringify(value));
   }
 
-  // Helper to read an array from localStorage
+  // Reads an array from localStorage
   function readArray(key) {
     let value = readJSON(key, []);
     return Array.isArray(value) ? value : [];
   }
 
-  // Helper to write an array to localStorage
+  // Writes an array to localStorage
   function writeArray(key, value) {
     writeJSON(key, value);
   }
 
-  // Helper to resolve current user storage key
+  // Resolves the unique storage namespace key for the active user
   function getUserStorageKey() {
     let account = getCurrentUser();
     if (account && (account.id || account.email)) {
@@ -56,7 +52,7 @@ const PrepStorage = (function () {
     return who ? `whoami_${who}` : "guest_user";
   }
 
-  // Questions (scoped per user account)
+  // Retrieves all logged questions for the active user
   function getQuestions() {
     let userKey = getUserStorageKey();
     let allQuestions = readJSON(KEYS.questions, {});
@@ -67,6 +63,7 @@ const PrepStorage = (function () {
     return [];
   }
 
+  // Saves questions array for the active user
   function setQuestions(value) {
     let userKey = getUserStorageKey();
     let allQuestions = readJSON(KEYS.questions, {});
@@ -77,44 +74,48 @@ const PrepStorage = (function () {
     writeJSON(KEYS.questions, nextQuestions);
   }
 
-  // Slots
+  // Returns all shared mock interview slots
   function getSlots() {
     return readArray(KEYS.slots);
   }
 
+  // Saves the shared mock interview slots array
   function setSlots(value) {
     writeArray(KEYS.slots, value);
   }
 
-  // Bookings
+  // Returns all mock interview bookings
   function getBookings() {
     return readArray(KEYS.bookings);
   }
 
+  // Saves mock interview bookings array
   function setBookings(value) {
     writeArray(KEYS.bookings, value);
   }
 
-  // Whoami (guest user display name)
+  // Returns display name for unauthenticated guest sessions
   function getWhoami() {
     return localStorage.getItem(KEYS.whoami) || "";
   }
 
+  // Updates display name for guest sessions
   function setWhoami(value) {
     localStorage.setItem(KEYS.whoami, value);
   }
 
-  // User Accounts
+  // Returns list of registered user accounts
   function getUsers() {
     let value = readJSON(KEYS.users, []);
     return Array.isArray(value) ? value : [];
   }
 
+  // Saves registered user accounts array
   function setUsers(value) {
     writeJSON(KEYS.users, value);
   }
 
-  // Current Logged-in User
+  // Retrieves the currently authenticated user object
   function getCurrentUser() {
     try {
       let value = JSON.parse(localStorage.getItem(KEYS.currentUser));
@@ -124,6 +125,7 @@ const PrepStorage = (function () {
     }
   }
 
+  // Updates or clears the currently authenticated user session
   function setCurrentUser(value) {
     if (!value) {
       localStorage.removeItem(KEYS.currentUser);
@@ -132,17 +134,18 @@ const PrepStorage = (function () {
     localStorage.setItem(KEYS.currentUser, JSON.stringify(value));
   }
 
-  // Theme preference
+  // Reads the saved theme preference ('light' or 'dark')
   function getTheme() {
     let value = localStorage.getItem(KEYS.theme);
     return value === "dark" ? "dark" : "light";
   }
 
+  // Saves the theme preference to localStorage
   function setTheme(value) {
     localStorage.setItem(KEYS.theme, value === "dark" ? "dark" : "light");
   }
 
-  // LeetCode Username
+  // Gets the saved LeetCode username for the active user
   function getLeetCodeUsername() {
     let account = getCurrentUser();
     if (!account || !account.id) return "";
@@ -151,6 +154,7 @@ const PrepStorage = (function () {
     return typeof saved === "object" ? String(saved.username || "") : String(saved || "");
   }
 
+  // Saves the LeetCode username for the active user
   function setLeetCodeUsername(value) {
     let account = getCurrentUser();
     if (!account || !account.id) return;
@@ -160,7 +164,7 @@ const PrepStorage = (function () {
     writeJSON(KEYS.leetCodeProfiles, nextProfiles);
   }
 
-  // GeeksforGeeks Username
+  // Gets the saved GeeksforGeeks handle for the active user
   function getGfgUsername() {
     let account = getCurrentUser();
     if (!account || !account.id) return "";
@@ -169,6 +173,7 @@ const PrepStorage = (function () {
     return typeof saved === "object" ? String(saved.username || "") : String(saved || "");
   }
 
+  // Saves the GeeksforGeeks handle for the active user
   function setGfgUsername(value) {
     let account = getCurrentUser();
     if (!account || !account.id) return;
@@ -178,7 +183,7 @@ const PrepStorage = (function () {
     writeJSON(KEYS.gfgProfiles, nextProfiles);
   }
 
-  // GeeksforGeeks Cached Data
+  // Retrieves cached GFG stats and heatmap payload for a username
   function getGfgCache(username) {
     if (!username) return null;
     let cache = readJSON(KEYS.gfgCache, {});
@@ -186,6 +191,7 @@ const PrepStorage = (function () {
     return cache && typeof cache === "object" ? cache[key] || null : null;
   }
 
+  // Caches GFG stats and heatmap payload for a username
   function setGfgCache(username, data) {
     if (!username || !data) return;
     let cache = readJSON(KEYS.gfgCache, {});
@@ -195,11 +201,12 @@ const PrepStorage = (function () {
     writeJSON(KEYS.gfgCache, nextCache);
   }
 
-  // CS Core Sheets Progress (Striver's CN, DBMS, OS)
+  // Helper resolving storage key for CS Core sheets progress
   function getCsUserKey() {
     return getUserStorageKey();
   }
 
+  // Retrieves CS Core sheets completion and bookmarks map for the active user
   function getCsCoreProgress() {
     let userKey = getCsUserKey();
     let allProgress = readJSON(KEYS.csCoreProgress, {});
@@ -208,6 +215,7 @@ const PrepStorage = (function () {
       : {};
   }
 
+  // Saves CS Core sheets progress map for the active user
   function setCsCoreProgress(progressMap) {
     let userKey = getCsUserKey();
     let allProgress = readJSON(KEYS.csCoreProgress, {});
@@ -216,6 +224,7 @@ const PrepStorage = (function () {
     writeJSON(KEYS.csCoreProgress, nextProgress);
   }
 
+  // Toggles the completed status of a CS Core sheet topic
   function toggleCsTopicComplete(topicId) {
     let progress = getCsCoreProgress();
     let current = progress[topicId] || {};
@@ -229,6 +238,7 @@ const PrepStorage = (function () {
     return isCompleted;
   }
 
+  // Toggles bookmark status on a CS Core sheet topic
   function toggleCsTopicBookmark(topicId) {
     let progress = getCsCoreProgress();
     let current = progress[topicId] || {};
@@ -241,6 +251,7 @@ const PrepStorage = (function () {
     return isBookmarked;
   }
 
+  // Saves user revision notes for a specific CS Core sheet topic
   function saveCsTopicNotes(topicId, notes) {
     let progress = getCsCoreProgress();
     let current = progress[topicId] || {};
@@ -251,6 +262,7 @@ const PrepStorage = (function () {
     setCsCoreProgress(progress);
   }
 
+  // Links a CS Core sheet topic to an SM-2 spaced repetition question record
   function linkCsTopicToSm2(topicId, sm2QuestionId) {
     let progress = getCsCoreProgress();
     let current = progress[topicId] || {};
@@ -262,7 +274,7 @@ const PrepStorage = (function () {
     setCsCoreProgress(progress);
   }
 
-  // Generate Unique ID
+  // Generates a unique identifier string
   function uid() {
     if (typeof crypto !== "undefined" && crypto.randomUUID) {
       return crypto.randomUUID();
@@ -301,3 +313,9 @@ const PrepStorage = (function () {
   };
 })();
 
+if (typeof window !== "undefined") {
+  window.PrepStorage = PrepStorage;
+}
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = PrepStorage;
+}

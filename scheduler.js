@@ -1,7 +1,3 @@
-// ============================================================
-// Peer Mock Interview Scheduler Logic
-// ============================================================
-
 const Scheduler = (function () {
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const DEFAULT_TIMES = ["09:00", "11:00", "13:00", "15:00", "17:00", "19:00"];
@@ -10,12 +6,11 @@ const Scheduler = (function () {
     "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00"
   ];
 
-  // Convert any time string (e.g. "9:00", "09:30", "14:15", "2:30 PM") to minutes from midnight
+  // Parses any time string (e.g. "9:00", "14:15", "2:30 PM") into minutes from midnight
   function timeToMinutes(timeStr) {
     if (!timeStr) return 0;
     let s = String(timeStr).trim();
 
-    // Check for 12-hour AM/PM format
     let isPM = /pm/i.test(s);
     let isAM = /am/i.test(s);
     let clean = s.replace(/[^\d:]/g, "");
@@ -29,7 +24,7 @@ const Scheduler = (function () {
     return Math.max(0, Math.min(23 * 60 + 59, hours * 60 + minutes));
   }
 
-  // Normalize time string to 24-hour HH:MM format
+  // Normalizes a time string to 24-hour HH:MM format
   function normalizeTime(timeStr) {
     let totalMinutes = timeToMinutes(timeStr);
     let hours = Math.floor(totalMinutes / 60);
@@ -37,7 +32,7 @@ const Scheduler = (function () {
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
   }
 
-  // Format time for user-friendly display (e.g. "09:00" -> "9:00 AM", "14:30" -> "2:30 PM")
+  // Formats time for readable 12-hour display (e.g. "09:00" -> "9:00 AM")
   function formatDisplayTime(timeStr) {
     let totalMinutes = timeToMinutes(timeStr);
     let hours = Math.floor(totalMinutes / 60);
@@ -48,7 +43,7 @@ const Scheduler = (function () {
     return `${displayHour}${minuteStr} ${ampm}`;
   }
 
-  // Dynamically extract and sort all time rows for the schedule grid
+  // Returns all unique, sorted time slots for the weekly grid rows
   function getAllScheduleTimes(slots) {
     let timeSet = new Set(DEFAULT_TIMES.map(normalizeTime));
 
@@ -65,19 +60,19 @@ const Scheduler = (function () {
     });
   }
 
-  // Check if booking is active
+  // Checks whether a booking is active (not cancelled)
   function isActive(booking) {
     return booking && booking.status !== "cancelled";
   }
 
-  // Check if two names are the same person (case insensitive)
+  // Compares two user names case-insensitively
   function samePerson(name1, name2) {
     let a = String(name1 || "").trim().toLowerCase();
     let b = String(name2 || "").trim().toLowerCase();
     return a === b;
   }
 
-  // Find active booking for a slot
+  // Finds an active booking associated with a specific slot ID
   function slotBooking(bookings, slotId) {
     if (!bookings) return null;
     return bookings.find(function (booking) {
@@ -85,7 +80,7 @@ const Scheduler = (function () {
     });
   }
 
-  // Check if person has a scheduling conflict
+  // Checks if a user already has an active session at the given day and time
   function personHasConflict(data, personName, day, time) {
     let slots = data.slots || [];
     let bookings = data.bookings || [];
@@ -108,7 +103,7 @@ const Scheduler = (function () {
     });
   }
 
-  // Check if host already offered a slot at this day and time
+  // Checks if a host has already offered a slot at the same day and time
   function hasOfferedSlot(slots, hostName, day, time) {
     if (!slots) return false;
     let targetNormTime = normalizeTime(time);
@@ -117,7 +112,7 @@ const Scheduler = (function () {
     });
   }
 
-  // Get short weekday string for a date (Mon, Tue, etc.)
+  // Returns short 3-letter weekday name for a date
   function weekdayShort(date) {
     if (!date) {
       date = new Date();
@@ -126,24 +121,23 @@ const Scheduler = (function () {
     return daysArr[date.getDay()];
   }
 
-  // Check if a weekly scheduled session has already concluded in current real time
+  // Determines if a scheduled weekly session has already ended
   function isSessionPast(day, timeStr, durationMinutes) {
     if (!day || !timeStr) return true;
     let now = new Date();
-    let dayMap = { 0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5 }; // Sun=6, Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5
+    let dayMap = { 0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5 };
     let currentDayIndex = dayMap[now.getDay()];
     let slotDayIndex = DAYS.indexOf(day);
 
     if (slotDayIndex === -1) return true;
 
     if (currentDayIndex > slotDayIndex) {
-      return true; // Day has already passed earlier in the current week
+      return true;
     }
     if (currentDayIndex < slotDayIndex) {
-      return false; // Day is later in the current week
+      return false;
     }
 
-    // Same day: check if current time in minutes >= slot start time + duration
     let currentMinutes = now.getHours() * 60 + now.getMinutes();
     let startMinutes = timeToMinutes(timeStr);
     let dur = parseInt(durationMinutes, 10) || 60;
@@ -152,7 +146,7 @@ const Scheduler = (function () {
     return currentMinutes >= endMinutes;
   }
 
-  // Get formatted end time display for a session
+  // Computes the display end time given a start time and duration in minutes
   function getEndTimeDisplay(timeStr, durationMinutes) {
     let startMinutes = timeToMinutes(timeStr);
     let dur = parseInt(durationMinutes, 10) || 60;
@@ -177,3 +171,9 @@ const Scheduler = (function () {
   };
 })();
 
+if (typeof window !== "undefined") {
+  window.Scheduler = Scheduler;
+}
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = Scheduler;
+}
