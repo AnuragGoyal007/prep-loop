@@ -129,13 +129,37 @@ function populateDsaProblemOptions(topicValue) {
 function updateQuestionTopicFields() {
   let form = document.getElementById("question-form");
   if (!form) return;
-  let isDsa = form.elements["tag"].value === "DSA";
-  document.getElementById("manual-topic-field").hidden = isDsa;
+  let selectedTag = form.elements["tag"].value;
+  let hasTag = Boolean(selectedTag);
+  let isDsa = selectedTag === "DSA";
+  let isCore = ["DBMS", "CN", "OS"].includes(selectedTag);
+  document.getElementById("manual-topic-field").hidden = hasTag;
   document.getElementById("dsa-topic-field").hidden = !isDsa;
   document.getElementById("dsa-problem-field").hidden = !isDsa;
-  form.elements["topic"].required = !isDsa;
+  document.getElementById("core-topic-field").hidden = !isCore;
+  form.elements["topic"].required = false;
   form.elements["dsaTopic"].required = isDsa;
   form.elements["dsaProblem"].required = isDsa;
+  form.elements["coreTopic"].required = isCore;
+  form.elements["dsaTopic"].disabled = !isDsa;
+  form.elements["dsaProblem"].disabled = !isDsa || !form.elements["dsaTopic"].value;
+  form.elements["coreTopic"].disabled = !isCore;
+  if (isCore) {
+    populateCoreTopicOptions(selectedTag.toLowerCase());
+  } else {
+    populateCoreTopicOptions("");
+  }
+}
+
+function populateCoreTopicOptions(subjectId) {
+  let form = document.getElementById("question-form");
+  if (!form || typeof CS_SHEETS_DATA === "undefined") return;
+  let topicSelect = form.elements["coreTopic"];
+  let topics = CS_SHEETS_DATA.getTopicsBySubject(subjectId);
+  topicSelect.innerHTML = subjectId
+    ? `<option value="">Choose a topic</option>${topics.map(function (topic) { return `<option value="${escapeHtml(topic.title)}">${escapeHtml(topic.title)}</option>`; }).join("")}`
+    : `<option value="">Choose a subject first</option>`;
+  topicSelect.disabled = !subjectId;
 }
 
 // Helper to format date as YYYY.M.D
@@ -1347,13 +1371,15 @@ function onQuestionSubmit(event) {
 
   let form = event.target;
   let tag = form.elements["tag"] ? form.elements["tag"].value : "DSA";
-  let topic = tag === "DSA" ? form.elements["dsaProblem"].value.trim() : form.elements["topic"].value.trim();
+  let isDsa = tag === "DSA";
+  let isCore = ["DBMS", "CN", "OS"].includes(tag);
+  let topic = isDsa ? form.elements["dsaProblem"].value.trim() : isCore ? form.elements["coreTopic"].value.trim() : form.elements["topic"].value.trim();
   let difficulty = form.elements["difficulty"].value;
   let timeTaken = Number(form.elements["timeTaken"].value);
   let outcome = form.elements["outcome"].value;
   let isCorrect = outcome === "solved";
 
-  if (!topic || (tag === "DSA" && !form.elements["dsaTopic"].value) || !Number.isFinite(timeTaken) || timeTaken < 0) {
+  if (!tag || !topic || (isDsa && !form.elements["dsaTopic"].value) || !Number.isFinite(timeTaken) || timeTaken < 0) {
     return;
   }
 
@@ -1388,9 +1414,10 @@ function onQuestionSubmit(event) {
 
   PrepStorage.setQuestions(questions);
   form.reset();
-  if (form.elements["tag"]) form.elements["tag"].value = "DSA";
+  if (form.elements["tag"]) form.elements["tag"].value = "";
   form.elements["dsaTopic"].value = "";
   populateDsaProblemOptions("");
+  populateCoreTopicOptions("");
   form.elements["difficulty"].value = "medium";
   form.elements["outcome"].value = "solved";
   updateQuestionTopicFields();
@@ -2117,6 +2144,7 @@ function initialize() {
     document.getElementById("question-form").elements["dsaTopic"].insertAdjacentHTML("beforeend", `<option value="${escapeHtml(item.topic)}">${escapeHtml(item.topic)}</option>`);
   });
   populateDsaProblemOptions("");
+  populateCoreTopicOptions("");
   updateQuestionTopicFields();
   document.getElementById("offer-form").addEventListener("submit", onOfferSubmit);
   document.getElementById("profile-form").addEventListener("submit", saveProfile);
