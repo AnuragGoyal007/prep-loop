@@ -1425,71 +1425,36 @@ function onQuestionSubmit(event) {
   renderAll();
 }
 
-// Build a single slot grid cell
-function getGridCell(slot, slotBookingsMap, currentUser, day, time) {
+// Build one schedule cell, allowing several offers at the same time.
+function getGridCell(slotsAtTime, slotBookingsMap, currentUser, day, time) {
   let displayTime = Scheduler.formatDisplayTime(time);
 
-  if (!slot) {
+  if (!slotsAtTime || slotsAtTime.length === 0) {
     return `<button class="slot-cell is-empty" type="button" data-offer-day="${escapeHtml(day)}" data-offer-time="${escapeHtml(time)}" aria-label="Offer slot for ${escapeHtml(day)} at ${escapeHtml(displayTime)}" title="Click to offer a slot on ${escapeHtml(day)} at ${escapeHtml(displayTime)}"><span class="empty-plus">+</span><span class="empty-hint">Offer</span></button>`;
   }
 
-  let booking = slotBookingsMap.get(slot.id);
-  let isMySlot = currentUser && Scheduler.samePerson(slot.hostName, currentUser);
-  let isInvolved = booking && currentUser && (isMySlot || Scheduler.samePerson(booking.requesterName, currentUser));
-  let duration = slot.duration ? `${slot.duration}m` : "60m";
-  let topicBadge = slot.topic ? `<span class="slot-topic-badge" title="${escapeHtml(slot.topic)}">${escapeHtml(slot.topic)}</span>` : "";
+  let offersHtml = slotsAtTime.map(function (slot) {
+    let booking = slotBookingsMap.get(slot.id);
+    let isMySlot = currentUser && Scheduler.samePerson(slot.hostName, currentUser);
+    let isInvolved = booking && currentUser && (isMySlot || Scheduler.samePerson(booking.requesterName, currentUser));
+    let duration = slot.duration ? `${slot.duration}m` : "60m";
+    let topicBadge = slot.topic ? `<span class="slot-topic-badge" title="${escapeHtml(slot.topic)}">${escapeHtml(slot.topic)}</span>` : "";
 
-  // 1. Open slot offered by someone else
-  if (!booking && !isMySlot) {
-    return `
-      <div class="slot-cell is-open">
-        <div class="slot-cell-header">
-          <span class="slot-host" title="Host: ${escapeHtml(slot.hostName)}">${escapeHtml(slot.hostName)}</span>
-          <span class="slot-duration-pill">${duration}</span>
-        </div>
-        ${topicBadge}
-        <button class="slot-action-btn book-btn" type="button" data-book-slot="${slot.id}" aria-label="Book ${escapeHtml(slot.hostName)}’s slot at ${escapeHtml(displayTime)}">Book</button>
-      </div>
-    `;
-  }
+    if (!booking && !isMySlot) {
+      return `<div class="slot-offer is-open"><div class="slot-cell-header"><span class="slot-host" title="Host: ${escapeHtml(slot.hostName)}">${escapeHtml(slot.hostName)}</span><span class="slot-duration-pill">${duration}</span></div>${topicBadge}<button class="slot-action-btn book-btn" type="button" data-book-slot="${slot.id}" aria-label="Book ${escapeHtml(slot.hostName)}’s slot at ${escapeHtml(displayTime)}">Book</button></div>`;
+    }
+    if (!booking && isMySlot) {
+      return `<div class="slot-offer is-mine"><div class="slot-cell-header"><span class="slot-badge-mine">Your slot</span><span class="slot-duration-pill">${duration}</span></div>${topicBadge}<button class="slot-action-btn remove-btn" type="button" data-remove-slot="${slot.id}" title="Remove your open slot" aria-label="Remove slot">Remove</button></div>`;
+    }
+    if (booking && isInvolved) {
+      let otherPerson = isMySlot ? booking.requesterName : slot.hostName;
+      let roleText = isMySlot ? "Host" : "Guest";
+      return `<div class="slot-offer is-booked-mine"><div class="slot-cell-header"><span class="slot-badge-booked">Booked</span><span class="slot-duration-pill">${duration}</span></div><span class="slot-peer" title="With ${escapeHtml(otherPerson)}">w/ ${escapeHtml(otherPerson)}</span><span class="slot-role-tag">${roleText}</span></div>`;
+    }
+    return `<div class="slot-offer is-booked"><span class="slot-taken-label">Booked</span><span class="slot-duration-pill">${duration}</span></div>`;
+  }).join("");
 
-  // 2. Open slot offered by current user
-  if (!booking && isMySlot) {
-    return `
-      <div class="slot-cell is-mine">
-        <div class="slot-cell-header">
-          <span class="slot-badge-mine">Your slot</span>
-          <span class="slot-duration-pill">${duration}</span>
-        </div>
-        ${topicBadge}
-        <button class="slot-action-btn remove-btn" type="button" data-remove-slot="${slot.id}" title="Remove your open slot" aria-label="Remove slot">Remove</button>
-      </div>
-    `;
-  }
-
-  // 3. Booked session involving current user
-  if (booking && isInvolved) {
-    let otherPerson = isMySlot ? booking.requesterName : slot.hostName;
-    let roleText = isMySlot ? "Host" : "Guest";
-    return `
-      <div class="slot-cell is-booked-mine">
-        <div class="slot-cell-header">
-          <span class="slot-badge-booked">Booked</span>
-          <span class="slot-duration-pill">${duration}</span>
-        </div>
-        <span class="slot-peer" title="With ${escapeHtml(otherPerson)}">w/ ${escapeHtml(otherPerson)}</span>
-        <span class="slot-role-tag">${roleText}</span>
-      </div>
-    `;
-  }
-
-  // 4. Booked session between other users
-  return `
-    <div class="slot-cell is-booked">
-      <span class="slot-taken-label">Booked</span>
-      <span class="slot-duration-pill">${duration}</span>
-    </div>
-  `;
+  return `<div class="slot-cell slot-cell-multi">${offersHtml}</div>`;
 }
 
 // Render schedule tab
@@ -1522,10 +1487,10 @@ function renderSchedule() {
 
     for (let d = 0; d < Scheduler.DAYS.length; d++) {
       let day = Scheduler.DAYS[d];
-      let matchingSlot = slots.find(function (s) {
+      let matchingSlots = slots.filter(function (s) {
         return s.day === day && Scheduler.normalizeTime(s.time) === time;
       });
-      gridHtml += getGridCell(matchingSlot, slotBookingsMap, currentUser, day, time);
+      gridHtml += getGridCell(matchingSlots, slotBookingsMap, currentUser, day, time);
     }
   }
 
