@@ -46,13 +46,35 @@ const PrepStorage = (function () {
     writeJSON(key, value);
   }
 
-  // Questions
+  // Helper to resolve current user storage key
+  function getUserStorageKey() {
+    let account = getCurrentUser();
+    if (account && (account.id || account.email)) {
+      return String(account.id || account.email);
+    }
+    let who = getWhoami();
+    return who ? `whoami_${who}` : "guest_user";
+  }
+
+  // Questions (scoped per user account)
   function getQuestions() {
-    return readArray(KEYS.questions);
+    let userKey = getUserStorageKey();
+    let allQuestions = readJSON(KEYS.questions, {});
+    if (allQuestions && typeof allQuestions === "object" && !Array.isArray(allQuestions)) {
+      let userList = allQuestions[userKey];
+      return Array.isArray(userList) ? userList : [];
+    }
+    return [];
   }
 
   function setQuestions(value) {
-    writeArray(KEYS.questions, value);
+    let userKey = getUserStorageKey();
+    let allQuestions = readJSON(KEYS.questions, {});
+    let nextQuestions = allQuestions && typeof allQuestions === "object" && !Array.isArray(allQuestions)
+      ? allQuestions
+      : {};
+    nextQuestions[userKey] = Array.isArray(value) ? value : [];
+    writeJSON(KEYS.questions, nextQuestions);
   }
 
   // Slots
@@ -175,12 +197,7 @@ const PrepStorage = (function () {
 
   // CS Core Sheets Progress (Striver's CN, DBMS, OS)
   function getCsUserKey() {
-    let account = getCurrentUser();
-    if (account && (account.id || account.email)) {
-      return String(account.id || account.email);
-    }
-    let who = getWhoami();
-    return who ? `whoami_${who}` : "guest_user";
+    return getUserStorageKey();
   }
 
   function getCsCoreProgress() {
