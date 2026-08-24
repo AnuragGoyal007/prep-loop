@@ -329,7 +329,9 @@
           <div class="section-intro"><p class="eyebrow">Spaced repetition tracker</p><h1>Log the work. Let the interval grow.</h1><p>Each attempt recalculates the next review using a simplified SM-2 schedule.</p></div>
           <section class="card form-card" aria-labelledby="attempt-title"><div class="card-heading"><h2 id="attempt-title">Log a question attempt</h2><span class="data-note">updates matching topics</span></div>
             <form id="question-form" class="form-grid">
-              <label>Topic<input name="topic" type="text" required maxlength="120" placeholder="e.g. Binary search" /></label>
+              <label id="manual-topic-field" hidden>Topic<input name="topic" type="text" maxlength="120" placeholder="e.g. ACID properties" /></label>
+              <label id="dsa-topic-field">SDE Sheet topic<select name="dsaTopic" required><option value="">Choose a topic</option></select></label>
+              <label id="dsa-problem-field">Problem<select name="dsaProblem" required disabled><option value="">Choose a topic first</option></select></label>
               <label>Tag<select name="tag"><option value="DSA" selected>DSA</option><option value="DBMS">DBMS</option><option value="CN">CN</option><option value="OS">OS</option></select></label>
               <label>Difficulty<select name="difficulty"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select></label>
               <label>Time taken <span class="unit">minutes</span><input name="timeTaken" type="number" min="0" max="9999" required placeholder="25" /></label>

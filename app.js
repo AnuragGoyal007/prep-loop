@@ -10,6 +10,21 @@ let gfgCardVersion = "";
 let toastTimer = null;
 let gfgFetchSeq = 0;
 
+const STRIVER_SDE_SHEET = [
+  { topic: "Arrays", problems: ["Set Matrix Zeroes", "Pascal's Triangle", "Next Permutation", "Kadane's Algorithm", "Sort an Array of 0s, 1s and 2s", "Merge Overlapping Intervals"] },
+  { topic: "Binary Search", problems: ["Binary Search", "Search in Rotated Sorted Array", "Find Minimum in Rotated Sorted Array", "Allocate Books", "Aggressive Cows"] },
+  { topic: "Strings", problems: ["Reverse Words in a String", "Longest Palindromic Substring", "Roman Number to Integer", "Implement Atoi", "Longest Common Prefix"] },
+  { topic: "Linked List", problems: ["Reverse a Linked List", "Find the Middle of a Linked List", "Detect a Cycle in a Linked List", "Remove N-th Node from the End", "Merge Two Sorted Linked Lists", "Add Two Numbers"] },
+  { topic: "Stack and Queue", problems: ["Valid Parentheses", "Implement Stack using Queues", "Implement Queue using Stacks", "Next Greater Element", "Largest Rectangle in Histogram"] },
+  { topic: "Greedy", problems: ["N Meetings in One Room", "Minimum Platforms", "Job Sequencing Problem", "Fractional Knapsack", "Jump Game"] },
+  { topic: "Binary Trees", problems: ["Inorder Traversal", "Preorder Traversal", "Level Order Traversal", "Maximum Depth of Binary Tree", "Diameter of Binary Tree", "Lowest Common Ancestor"] },
+  { topic: "Binary Search Trees", problems: ["Search in a Binary Search Tree", "Validate a Binary Search Tree", "Kth Smallest Element in a BST", "Lowest Common Ancestor in a BST"] },
+  { topic: "Heaps", problems: ["Kth Largest Element", "Merge K Sorted Arrays", "Top K Frequent Elements", "Find Median from Data Stream"] },
+  { topic: "Graphs", problems: ["BFS of a Graph", "DFS of a Graph", "Number of Islands", "Detect Cycle in an Undirected Graph", "Topological Sort", "Dijkstra's Algorithm"] },
+  { topic: "Dynamic Programming", problems: ["Climbing Stairs", "House Robber", "0/1 Knapsack", "Longest Common Subsequence", "Coin Change", "Edit Distance"] },
+  { topic: "Backtracking", problems: ["N-Queens", "Sudoku Solver", "Rat in a Maze", "Combination Sum", "Word Search"] }
+];
+
 const LEETCARD_ENDPOINT = "https://leetcard.jacoblin.cool/";
 const GFG_API_ENDPOINTS = [
   "https://gfg-stats-api.vercel.app",
@@ -98,6 +113,29 @@ function getTagPill(tag) {
     cleanTag = "DSA";
   }
   return `<span class="tag-pill tag-${cleanTag.toLowerCase()}">${escapeHtml(cleanTag)}</span>`;
+}
+
+function populateDsaProblemOptions(topicValue) {
+  let form = document.getElementById("question-form");
+  if (!form) return;
+  let problemSelect = form.elements["dsaProblem"];
+  let selectedTopic = STRIVER_SDE_SHEET.find(function (item) { return item.topic === topicValue; });
+  problemSelect.innerHTML = selectedTopic
+    ? `<option value="">Choose a problem</option>${selectedTopic.problems.map(function (problem) { return `<option value="${escapeHtml(problem)}">${escapeHtml(problem)}</option>`; }).join("")}`
+    : `<option value="">Choose a topic first</option>`;
+  problemSelect.disabled = !selectedTopic;
+}
+
+function updateQuestionTopicFields() {
+  let form = document.getElementById("question-form");
+  if (!form) return;
+  let isDsa = form.elements["tag"].value === "DSA";
+  document.getElementById("manual-topic-field").hidden = isDsa;
+  document.getElementById("dsa-topic-field").hidden = !isDsa;
+  document.getElementById("dsa-problem-field").hidden = !isDsa;
+  form.elements["topic"].required = !isDsa;
+  form.elements["dsaTopic"].required = isDsa;
+  form.elements["dsaProblem"].required = isDsa;
 }
 
 // Helper to format date as YYYY.M.D
@@ -1308,14 +1346,14 @@ function onQuestionSubmit(event) {
   event.preventDefault();
 
   let form = event.target;
-  let topic = form.elements["topic"].value.trim();
   let tag = form.elements["tag"] ? form.elements["tag"].value : "DSA";
+  let topic = tag === "DSA" ? form.elements["dsaProblem"].value.trim() : form.elements["topic"].value.trim();
   let difficulty = form.elements["difficulty"].value;
   let timeTaken = Number(form.elements["timeTaken"].value);
   let outcome = form.elements["outcome"].value;
   let isCorrect = outcome === "solved";
 
-  if (!topic || !Number.isFinite(timeTaken) || timeTaken < 0) {
+  if (!topic || (tag === "DSA" && !form.elements["dsaTopic"].value) || !Number.isFinite(timeTaken) || timeTaken < 0) {
     return;
   }
 
@@ -1351,8 +1389,11 @@ function onQuestionSubmit(event) {
   PrepStorage.setQuestions(questions);
   form.reset();
   if (form.elements["tag"]) form.elements["tag"].value = "DSA";
+  form.elements["dsaTopic"].value = "";
+  populateDsaProblemOptions("");
   form.elements["difficulty"].value = "medium";
   form.elements["outcome"].value = "solved";
+  updateQuestionTopicFields();
 
   renderAll();
 }
@@ -2068,6 +2109,15 @@ function initialize() {
   });
 
   document.getElementById("question-form").addEventListener("submit", onQuestionSubmit);
+  document.getElementById("question-form").elements["tag"].addEventListener("change", updateQuestionTopicFields);
+  document.getElementById("question-form").elements["dsaTopic"].addEventListener("change", function (event) {
+    populateDsaProblemOptions(event.target.value);
+  });
+  STRIVER_SDE_SHEET.forEach(function (item) {
+    document.getElementById("question-form").elements["dsaTopic"].insertAdjacentHTML("beforeend", `<option value="${escapeHtml(item.topic)}">${escapeHtml(item.topic)}</option>`);
+  });
+  populateDsaProblemOptions("");
+  updateQuestionTopicFields();
   document.getElementById("offer-form").addEventListener("submit", onOfferSubmit);
   document.getElementById("profile-form").addEventListener("submit", saveProfile);
   document.getElementById("feedback-form").addEventListener("submit", saveFeedback);
