@@ -1,9 +1,5 @@
-// ============================================================
-// Spaced Repetition (SM-2 Algorithm) Helper Functions
-// ============================================================
-
 const SM2 = (function () {
-  // Format date to YYYY-MM-DD
+  // Formats a Date object into YYYY-MM-DD format
   function formatDate(date) {
     let year = date.getFullYear();
     let month = String(date.getMonth() + 1).padStart(2, "0");
@@ -11,19 +7,19 @@ const SM2 = (function () {
     return `${year}-${month}-${day}`;
   }
 
-  // Get today's date in YYYY-MM-DD format
+  // Returns today's date in YYYY-MM-DD format
   function today() {
     return formatDate(new Date());
   }
 
-  // Add days to a given YYYY-MM-DD date string
+  // Adds a number of days to a YYYY-MM-DD date string
   function addDays(dateString, days) {
     let date = new Date(dateString + "T00:00:00");
     date.setDate(date.getDate() + days);
     return formatDate(date);
   }
 
-  // Recalculate ease factor, interval, and next review date for a question
+  // Calculates next review date, interval, and ease factor using SM-2 rules
   function recalculate(question, correct, timeTaken, attemptDate) {
     if (!attemptDate) {
       attemptDate = today();
@@ -32,14 +28,12 @@ const SM2 = (function () {
     let oldEase = Number(question.easeFactor) || 2.5;
     let oldInterval = Number(question.interval) || 0;
 
-    // Adjust ease factor
     let newEase = oldEase + (correct ? 0.1 : -0.2);
     if (newEase < 1.3) {
       newEase = 1.3;
     }
     let easeFactor = Math.round(newEase * 100) / 100;
 
-    // Calculate new interval in days
     let interval = 1;
     if (correct) {
       if (oldInterval === 0) {
@@ -72,7 +66,7 @@ const SM2 = (function () {
     };
   }
 
-  // Create a new question object
+  // Creates and initializes a new question entry with default SM-2 values
   function newQuestion(params) {
     let date = params.date || today();
     let initialQuestion = {
@@ -96,3 +90,10 @@ const SM2 = (function () {
     newQuestion: newQuestion
   };
 })();
+
+if (typeof window !== "undefined") {
+  window.SM2 = SM2;
+}
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = SM2;
+}

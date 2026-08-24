@@ -154,9 +154,7 @@ body.theme-dark .toast { background:#F1F5F2; color:#111815; }
 body.theme-dark .theme-toggle:hover { background:#26332D; border-color:var(--ink-soft); }
 @media (max-width:720px) { .theme-toggle { width:34px; height:34px; font-size:16px; } }
 
-/* ============================================================ */
-/* LANDING PAGE STYLES                                          */
-/* ============================================================ */
+/* Landing page styles */
 .landing-screen { min-height:100vh; display:flex; flex-direction:column; background:var(--bg); }
 .landing-nav { position:sticky; top:0; z-index:40; background:rgba(238,241,238,.88); backdrop-filter:blur(12px); border-bottom:1px solid var(--line); }
 .landing-nav-inner { width:min(1200px, calc(100% - 48px)); margin:0 auto; min-height:74px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
@@ -265,9 +263,7 @@ body.theme-dark .theme-toggle:hover { background:#26332D; border-color:var(--ink
 .auth-back-btn { background:transparent; border:0; padding:0; font-size:13px; font-weight:600; color:var(--slate); cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
 .auth-back-btn:hover { color:var(--ink); text-decoration:underline; }
 
-/* ============================================================
-   CS Core Sheets (Striver's CN, DBMS, OS) Styles
-   ============================================================ */
+/* CS Core Sheets (Striver's CN, DBMS, OS) */
 .cs-overview-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; margin-bottom:22px; }
 .cs-subject-summary-card { padding:20px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); cursor:pointer; transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease; position:relative; }
 .cs-subject-summary-card:hover { transform:translateY(-2px); border-color:var(--ink-soft); box-shadow:0 8px 24px rgba(0,0,0,.04); }

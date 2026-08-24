@@ -1,8 +1,3 @@
-// ============================================================
-// Prep Loop - Main Application Logic
-// ============================================================
-
-// Global variables
 let leetCodeUsername = "";
 let leetCardVersion = "";
 let gfgUsername = "";
@@ -31,6 +26,7 @@ const GFG_API_ENDPOINTS = [
   "https://gfg-stats.tashif.codes"
 ];
 
+// Applies light or dark theme class to the body and updates theme toggle buttons
 function applyTheme(theme) {
   let isDark = theme === "dark";
   document.body.classList.toggle("theme-dark", isDark);
@@ -52,13 +48,14 @@ function applyTheme(theme) {
   }
 }
 
+// Toggles theme state between light and dark and persists to storage
 function toggleTheme() {
   let nextTheme = PrepStorage.getTheme() === "dark" ? "light" : "dark";
   PrepStorage.setTheme(nextTheme);
   applyTheme(nextTheme);
 }
 
-// Helper function to escape HTML special characters
+// Escapes special characters for safe string rendering in HTML
 function escapeHtml(text) {
   if (text === null || text === undefined) {
     return "";
@@ -71,7 +68,7 @@ function escapeHtml(text) {
     .replace(/'/g, "&#039;");
 }
 
-// Show a temporary popup notification message
+// Shows a temporary toast message notification
 function showToast(message) {
   let toast = document.getElementById("toast");
   if (!toast) return;
@@ -85,28 +82,28 @@ function showToast(message) {
   }, 3500);
 }
 
-// Helper to get current username
+// Gets the active user name from the top identity input
 function getCurrentUserName() {
   let identityInput = document.getElementById("identity-input");
   return identityInput ? identityInput.value.trim() : "";
 }
 
-// Helper to get current user account object
+// Retrieves the current authenticated user account from storage
 function getCurrentAccount() {
   return PrepStorage.getCurrentUser();
 }
 
-// Helper to create empty state box
+// Generates an empty state container with custom message
 function getEmptyState(message) {
   return `<div class="empty-state">${message}</div>`;
 }
 
-// Helper to render difficulty badge
+// Returns badge markup for question difficulty
 function getDifficultyPill(difficulty) {
   return `<span class="pill ${difficulty}">${escapeHtml(difficulty)}</span>`;
 }
 
-// Helper to render subject/topic tag badge (DSA, DBMS, CN, OS)
+// Returns subject badge markup (DSA, DBMS, CN, OS)
 function getTagPill(tag) {
   let cleanTag = String(tag || "DSA").trim().toUpperCase();
   if (!["DSA", "DBMS", "CN", "OS"].includes(cleanTag)) {
@@ -115,6 +112,7 @@ function getTagPill(tag) {
   return `<span class="tag-pill tag-${cleanTag.toLowerCase()}">${escapeHtml(cleanTag)}</span>`;
 }
 
+// Populates problem select dropdown based on chosen DSA category
 function populateDsaProblemOptions(topicValue) {
   let form = document.getElementById("question-form");
   if (!form) return;
@@ -126,6 +124,7 @@ function populateDsaProblemOptions(topicValue) {
   problemSelect.disabled = !selectedTopic;
 }
 
+// Toggles question form input fields depending on selected subject tag
 function updateQuestionTopicFields() {
   let form = document.getElementById("question-form");
   if (!form) return;
@@ -151,6 +150,7 @@ function updateQuestionTopicFields() {
   }
 }
 
+// Populates dropdown options for Core CS topics
 function populateCoreTopicOptions(subjectId) {
   let form = document.getElementById("question-form");
   if (!form || typeof CS_SHEETS_DATA === "undefined") return;
@@ -162,7 +162,7 @@ function populateCoreTopicOptions(subjectId) {
   topicSelect.disabled = !subjectId;
 }
 
-// Helper to format date as YYYY.M.D
+// Formats date object into YYYY.M.D format
 function formatDateDot(date) {
   let year = date.getFullYear();
   let month = date.getMonth() + 1;
@@ -170,7 +170,7 @@ function formatDateDot(date) {
   return `${year}.${month}.${day}`;
 }
 
-// Screen display helpers
+// Navigates to landing screen and updates call-to-action buttons
 function showLandingScreen() {
   let landing = document.getElementById("landing-screen");
   let auth = document.getElementById("auth-screen");
@@ -180,7 +180,6 @@ function showLandingScreen() {
   if (auth) auth.hidden = true;
   if (app) app.hidden = true;
 
-  // Update landing CTA actions based on authentication state
   let account = getCurrentAccount();
   let guestActions = document.getElementById("landing-guest-actions");
   let userActions = document.getElementById("landing-user-actions");
@@ -201,6 +200,7 @@ function showLandingScreen() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+// Displays authentication screen in login or signup mode
 function showAuthScreen(mode = "login") {
   let landing = document.getElementById("landing-screen");
   let auth = document.getElementById("auth-screen");
@@ -214,6 +214,7 @@ function showAuthScreen(mode = "login") {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+// Switches view to main application dashboard and initializes user state
 function showAppScreen() {
   let landing = document.getElementById("landing-screen");
   let auth = document.getElementById("auth-screen");
@@ -229,7 +230,7 @@ function showAppScreen() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-// Set user identity field from logged-in account
+// Updates identity input with authenticated account name
 function setIdentityFromAccount() {
   let account = getCurrentAccount();
   let identityInput = document.getElementById("identity-input");
@@ -242,7 +243,7 @@ function setIdentityFromAccount() {
   }
 }
 
-// Switch between Login and Signup tabs
+// Switches between Login and Sign up tabs on the authentication modal
 function switchAuthMode(mode) {
   let loginForm = document.getElementById("login-form");
   let signupForm = document.getElementById("signup-form");
@@ -268,7 +269,7 @@ function switchAuthMode(mode) {
   });
 }
 
-// Handle login submit
+// Validates credentials and logs in user
 function handleLogin(event) {
   event.preventDefault();
 
@@ -312,7 +313,7 @@ function handleLogin(event) {
   showToast(`Welcome back, ${foundUser.name || "there"}!`);
 }
 
-// Handle sign up submit
+// Registers a new user account and navigates to the dashboard
 function handleSignup(event) {
   event.preventDefault();
 
@@ -362,7 +363,6 @@ function handleSignup(event) {
   PrepStorage.setCurrentUser(newUser);
   PrepStorage.setWhoami(name);
 
-  // Set optional LeetCode and GFG handles if provided
   if (leetcode) {
     PrepStorage.setLeetCodeUsername(leetcode);
     leetCodeUsername = leetcode;
@@ -396,7 +396,7 @@ function handleSignup(event) {
   showToast(`Account created for ${name}! Welcome to Prep Loop.`);
 }
 
-// Handle logout
+// Clears user session and resets application view to landing screen
 function handleLogout() {
   PrepStorage.setCurrentUser(null);
   PrepStorage.setWhoami("");
@@ -419,7 +419,7 @@ function handleLogout() {
   showToast("Logged out successfully.");
 }
 
-// Render the active account profile and live dashboard statistics
+// Renders the user profile card and prep metrics on the dashboard
 function renderProfileCard(questions, bookings, slots) {
   let profileCard = document.getElementById("profile-card");
   if (!profileCard) return;
@@ -481,6 +481,7 @@ function renderProfileCard(questions, bookings, slots) {
   `;
 }
 
+// Extracts a non-empty field value from account object across fallback keys
 function getAccountProfileValue(account, keys) {
   for (let i = 0; i < keys.length; i++) {
     if (account[keys[i]] !== undefined && account[keys[i]] !== null && String(account[keys[i]]).trim()) {
@@ -490,6 +491,7 @@ function getAccountProfileValue(account, keys) {
   return "";
 }
 
+// Generates profile avatar preview markup with initials fallback
 function getProfileAvatarMarkup(account) {
   let name = account ? (account.name || account.email || "?") : "?";
   let photo = account && (account.avatar || account.photo || account.profilePhoto || account.avatarUrl);
@@ -501,6 +503,7 @@ function getProfileAvatarMarkup(account) {
   return `<span class="profile-initials">${escapeHtml(initials)}</span>`;
 }
 
+// Pre-populates and opens profile editor dialog
 function openProfileEditor() {
   let account = getCurrentAccount();
   let dialog = document.getElementById("profile-dialog");
@@ -516,6 +519,7 @@ function openProfileEditor() {
   dialog.showModal();
 }
 
+// Saves updated profile fields and photo data URL to storage
 function saveProfile(event) {
   event.preventDefault();
 
@@ -571,7 +575,7 @@ function saveProfile(event) {
   reader.readAsDataURL(photoFile);
 }
 
-// Render LeetCode card
+// Renders the LeetCode status card image
 function renderLeetCodeProgress() {
   let usernameInput = document.getElementById("leetcode-username");
   let refreshButton = document.getElementById("leetcode-refresh");
@@ -608,7 +612,7 @@ function renderLeetCodeProgress() {
   statusDiv.innerHTML = `<img class="leetcode-image" src="${cardUrl}" alt="LeetCode progress card for @${escapeHtml(leetCodeUsername)}" loading="eager" referrerpolicy="no-referrer" />`;
 }
 
-// Refresh LeetCode card
+// Updates LeetCode handle and triggers image reload
 function refreshLeetCodeProgress(username) {
   if (username === undefined) {
     let input = document.getElementById("leetcode-username");
@@ -632,7 +636,7 @@ function refreshLeetCodeProgress(username) {
   showToast("LeetCode card refreshed.");
 }
 
-// Fetch GeeksforGeeks endpoint helper
+// Makes network request to GeeksforGeeks API endpoints with timeout protection
 async function fetchGfgEndpoint(path) {
   for (let i = 0; i < GFG_API_ENDPOINTS.length; i++) {
     let baseUrl = GFG_API_ENDPOINTS[i];
@@ -657,13 +661,13 @@ async function fetchGfgEndpoint(path) {
         }
       }
     } catch (err) {
-      // Try next endpoint if available
+      // Try fallback endpoint
     }
   }
   return { ok: false };
 }
 
-// Fetch user data from GeeksforGeeks APIs
+// Fetches both stats and heatmap data for a GeeksforGeeks username
 async function fetchGfgUser(username) {
   let userHandle = encodeURIComponent(String(username || "").trim());
 
@@ -687,7 +691,7 @@ async function fetchGfgUser(username) {
   };
 }
 
-// Generate GeeksforGeeks SVG Card with 52-week heatmap
+// Generates an interactive SVG card with solved counts and 52-week activity heatmap
 function generateGfgHeatmapSvg(username, stats, heatmap) {
   let isDarkTheme = document.body.classList.contains("theme-dark");
   let svgInk = isDarkTheme ? "#F1F5F2" : "#16211D";
@@ -716,7 +720,6 @@ function generateGfgHeatmapSvg(username, stats, heatmap) {
   let startStr = formatDateDot(startDate);
   let endStr = formatDateDot(now);
 
-  // Map contributions by date
   let dateMap = new Map();
   if (heatmap && Array.isArray(heatmap.dailyContributions)) {
     for (let i = 0; i < heatmap.dailyContributions.length; i++) {
@@ -787,7 +790,6 @@ function generateGfgHeatmapSvg(username, stats, heatmap) {
       </defs>
       <rect width="500" height="295" rx="10" fill="${svgCard}"/>
       
-      <!-- Header -->
       <g transform="translate(24, 18)">
         <rect x="0" y="3" width="26" height="26" rx="6" fill="#2f8d46"/>
         <path d="M7 16 C7 11 11 11 11 11 M7 16 C7 21 11 21 11 21 M19 16 C19 11 15 11 15 11 M19 16 C19 21 15 21 15 21" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round"/>
@@ -795,9 +797,7 @@ function generateGfgHeatmapSvg(username, stats, heatmap) {
         <text x="452" y="22" text-anchor="end" fill="#2f8d46" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="600">${escapeHtml(streakLabel)}</text>
       </g>
 
-      <!-- Solved Ring & Breakdown -->
       <g transform="translate(24, 58)">
-        <!-- Solved Ring -->
         <g transform="translate(42, 45)">
           <circle cx="0" cy="0" r="38" fill="none" stroke="${svgLine}" stroke-width="6.5"/>
           <circle cx="0" cy="0" r="38" fill="none" stroke="url(#gfgRing)" stroke-width="6.5" stroke-dasharray="238.7" stroke-dashoffset="${ringOffset}" stroke-linecap="round" transform="rotate(-90)"/>
@@ -805,21 +805,17 @@ function generateGfgHeatmapSvg(username, stats, heatmap) {
           <text x="0" y="21" text-anchor="middle" fill="${svgSoft}" font-family="'IBM Plex Sans', sans-serif" font-size="9" font-weight="600" letter-spacing="0.5">SOLVED</text>
         </g>
 
-        <!-- Difficulty Rows -->
         <g transform="translate(118, 12)">
-          <!-- Easy -->
           <text x="0" y="11" fill="${svgInk}" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Easy</text>
           <text x="334" y="11" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${easyCount} <tspan fill="#a0aec0">${basicCount ? `(+${basicCount} basic)` : ""}</tspan></text>
           <rect x="0" y="17" width="334" height="4" rx="2" fill="${svgMuted}"/>
           <rect x="0" y="17" width="${easyWidth}" height="4" rx="2" fill="#2f8d46"/>
 
-          <!-- Medium -->
           <text x="0" y="42" fill="${svgInk}" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Medium</text>
           <text x="334" y="42" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${mediumCount}</text>
           <rect x="0" y="48" width="334" height="4" rx="2" fill="${svgMuted}"/>
           <rect x="0" y="48" width="${mediumWidth}" height="4" rx="2" fill="#d97706"/>
 
-          <!-- Hard -->
           <text x="0" y="73" fill="${svgInk}" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Hard</text>
           <text x="334" y="73" text-anchor="end" fill="#4a5568" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500">${hardCount}</text>
           <rect x="0" y="79" width="334" height="4" rx="2" fill="${svgMuted}"/>
@@ -827,24 +823,20 @@ function generateGfgHeatmapSvg(username, stats, heatmap) {
         </g>
       </g>
 
-      <!-- Divider -->
       <line x1="24" y1="168" x2="476" y2="168" stroke="${svgLine}" stroke-width="1"/>
 
-      <!-- Heatmap Header -->
       <text x="24" y="196" fill="${svgInk}" font-family="'IBM Plex Sans', sans-serif" font-size="13" font-weight="700">Live Activity Heatmap (52 Weeks)</text>
       <text x="476" y="196" text-anchor="end" fill="#2f8d46" font-family="'IBM Plex Mono', monospace" font-size="11" font-weight="600">${totalSubmissions} Submissions · ${totalActiveDays} Active Days</text>
 
-      <!-- Heatmap Grid -->
       ${rectsHtml}
 
-      <!-- Dates -->
       <text x="24" y="284" fill="${svgSoft}" font-family="'IBM Plex Mono', monospace" font-size="10">${startStr}</text>
       <text x="476" y="284" text-anchor="end" fill="${svgSoft}" font-family="'IBM Plex Mono', monospace" font-size="10">${endStr}</text>
     </svg>
   `;
 }
 
-// Load and render GFG card
+// Fetches and renders live GeeksforGeeks stats with local caching
 async function loadGfgProgress(username, forceRefresh) {
   let userSlug = String(username || "").trim();
   let updatedNote = document.getElementById("gfg-updated");
@@ -893,7 +885,7 @@ async function loadGfgProgress(username, forceRefresh) {
   }
 }
 
-// Render GFG progress from state
+// Renders the GeeksforGeeks progress card container
 function renderGfgProgress() {
   let input = document.getElementById("gfg-username");
   let button = document.getElementById("gfg-refresh");
@@ -911,7 +903,7 @@ function renderGfgProgress() {
   loadGfgProgress(gfgUsername, false);
 }
 
-// Refresh GFG card
+// Updates GeeksforGeeks username and triggers a live data refresh
 function refreshGfgProgress(username) {
   if (username === undefined) {
     let input = document.getElementById("gfg-username");
@@ -935,14 +927,13 @@ function refreshGfgProgress(username) {
   showToast("Refreshing live GFG data...");
 }
 
-// CS Core Sheets State (Striver's CN, DBMS, OS)
 let csCurrentSubject = "all";
 let csCurrentStatus = "all";
 let csCurrentDifficulty = "all";
 let csSearchQuery = "";
 let openNotesDrawerId = null;
 
-// Render CS Core readiness widget on Dashboard
+// Renders the Core CS readiness overview widget on the dashboard
 function renderDashboardCsProgress() {
   let progressContainer = document.getElementById("dashboard-cs-progress");
   if (!progressContainer || typeof CS_SHEETS_DATA === "undefined") return;
@@ -996,7 +987,7 @@ function renderDashboardCsProgress() {
   `;
 }
 
-// Render CS Core tab
+// Renders the Core CS topics checklist, subject tabs, and search results
 function renderCsCore() {
   if (typeof CS_SHEETS_DATA === "undefined") return;
 
@@ -1004,7 +995,6 @@ function renderCsCore() {
   let progressMap = PrepStorage.getCsCoreProgress();
   let questions = PrepStorage.getQuestions();
 
-  // 1. Calculate stats per subject
   let subjects = CS_SHEETS_DATA.getSubjects();
   subjects.forEach(function (subj) {
     let subjTopics = CS_SHEETS_DATA.getTopicsBySubject(subj.id);
@@ -1027,7 +1017,6 @@ function renderCsCore() {
   let allTabCount = document.getElementById("count-all");
   if (allTabCount) allTabCount.textContent = allTopics.length;
 
-  // 2. Filter topics
   let filtered = allTopics.filter(function (topic) {
     if (csCurrentSubject !== "all" && topic.subject !== csCurrentSubject) {
       return false;
@@ -1070,7 +1059,6 @@ function renderCsCore() {
     return;
   }
 
-  // 3. Group by category
   let categoriesMap = new Map();
   filtered.forEach(function (topic) {
     let groupKey = `${topic.subject.toUpperCase()} • ${topic.category}`;
@@ -1104,7 +1092,6 @@ function renderCsCore() {
       let hasNotes = Boolean(notes.trim());
       let isOpenNotes = openNotesDrawerId === topic.id;
 
-      // Check if synced in SM-2 queue
       let sm2Q = questions.find(function (q) {
         return (p.sm2Id && q.id === p.sm2Id) || (q.topic.toLowerCase().trim() === topic.title.toLowerCase().trim());
       });
@@ -1176,7 +1163,7 @@ function renderCsCore() {
   container.innerHTML = html;
 }
 
-// 1-Click Sync topic with Spaced Repetition (SM-2)
+// Adds a CS Core topic to the SM-2 Spaced Repetition queue
 function addCsTopicToSm2(topicId) {
   if (typeof CS_SHEETS_DATA === "undefined") return;
   let topic = CS_SHEETS_DATA.getTopicById(topicId);
@@ -1207,20 +1194,16 @@ function addCsTopicToSm2(topicId) {
   renderAll();
 }
 
-// Render dashboard tab contents
+// Renders profile metrics, CS readiness, due reviews, and platform cards on the dashboard
 function renderDashboard() {
   let questions = PrepStorage.getQuestions();
   let slots = PrepStorage.getSlots();
   let bookings = PrepStorage.getBookings();
   let todayDate = SM2.today();
 
-  // 1. Profile card
   renderProfileCard(questions, bookings, slots);
-
-  // 2. CS Core Readiness widget
   renderDashboardCsProgress();
 
-  // 3. Due questions
   let dueQuestions = questions.filter(function (q) {
     return q.nextReviewDate <= todayDate;
   }).sort(function (a, b) {
@@ -1248,7 +1231,6 @@ function renderDashboard() {
   }
   document.getElementById("due-list").innerHTML = dueListHtml;
 
-  // 3. Today's sessions
   let currentUser = getCurrentUserName();
   let currentDay = Scheduler.weekdayShort();
   let todaySessions = [];
@@ -1299,12 +1281,11 @@ function renderDashboard() {
   }
   document.getElementById("sessions-list").innerHTML = sessionsListHtml;
 
-  // 4. Platform Progress Cards
   renderLeetCodeProgress();
   renderGfgProgress();
 }
 
-// Render questions table in questions tab
+// Renders the review queue table with ease factor and attempt metrics
 function renderQuestions() {
   let questions = PrepStorage.getQuestions().sort(function (a, b) {
     return a.nextReviewDate.localeCompare(b.nextReviewDate);
@@ -1365,7 +1346,7 @@ function renderQuestions() {
   `;
 }
 
-// Handle question form submit
+// Handles question attempt submission and recalculates SM-2 review parameters
 function onQuestionSubmit(event) {
   event.preventDefault();
 
@@ -1425,7 +1406,7 @@ function onQuestionSubmit(event) {
   renderAll();
 }
 
-// Build one schedule cell, allowing several offers at the same time.
+// Builds the HTML for an individual schedule grid cell supporting multiple offers
 function getGridCell(slotsAtTime, slotBookingsMap, currentUser, day, time) {
   let displayTime = Scheduler.formatDisplayTime(time);
 
@@ -1457,7 +1438,7 @@ function getGridCell(slotsAtTime, slotBookingsMap, currentUser, day, time) {
   return `<div class="slot-cell slot-cell-multi">${offersHtml}</div>`;
 }
 
-// Render schedule tab
+// Renders the 7-day availability schedule matrix and user bookings table
 function renderSchedule() {
   let slots = PrepStorage.getSlots();
   let bookings = PrepStorage.getBookings();
@@ -1474,7 +1455,6 @@ function renderSchedule() {
 
   let allTimes = Scheduler.getAllScheduleTimes(slots);
 
-  // 1. Build weekly availability grid
   let gridHtml = '<div class="grid-corner grid-header">Time</div>';
   for (let i = 0; i < Scheduler.DAYS.length; i++) {
     gridHtml += `<div class="grid-header">${Scheduler.DAYS[i]}</div>`;
@@ -1496,7 +1476,6 @@ function renderSchedule() {
 
   document.getElementById("schedule-grid").innerHTML = gridHtml;
 
-  // 2. Build My Bookings table
   let myBookings = [];
   if (currentUser) {
     for (let i = 0; i < bookings.length; i++) {
@@ -1619,7 +1598,7 @@ function renderSchedule() {
   `;
 }
 
-// Offer a new slot
+// Offers a new interview slot and validates against scheduling conflicts
 function onOfferSubmit(event) {
   event.preventDefault();
 
@@ -1673,7 +1652,7 @@ function onOfferSubmit(event) {
   renderAll();
 }
 
-// Remove an unbooked offered slot
+// Removes an unbooked slot offered by the active user
 function removeSlot(slotId) {
   let user = getCurrentUserName();
   let slots = PrepStorage.getSlots();
@@ -1706,7 +1685,7 @@ function removeSlot(slotId) {
   renderAll();
 }
 
-// Open offer form pre-filled for a specific calendar cell
+// Opens and pre-fills slot offering form when clicking an empty calendar cell
 function openOfferForSlot(day, time) {
   let form = document.getElementById("offer-form");
   let toggle = document.getElementById("offer-toggle");
@@ -1732,7 +1711,7 @@ function openOfferForSlot(day, time) {
   showToast(`Selected ${day} at ${Scheduler.formatDisplayTime(time)}. Customize & submit.`);
 }
 
-// Book an open slot
+// Books an open interview slot offered by a peer
 function tryBooking(slotId) {
   let user = getCurrentUserName();
   if (!user) {
@@ -1781,7 +1760,7 @@ function tryBooking(slotId) {
   renderAll();
 }
 
-// Status actions for bookings
+// Marks a confirmed session as done after its scheduled conclusion time
 function markDone(id) {
   let bookings = PrepStorage.getBookings();
   let target = bookings.find(function (b) { return b.id === id; });
@@ -1804,6 +1783,7 @@ function markDone(id) {
   renderAll();
 }
 
+// Rejects an interview booking and releases the slot
 function rejectBooking(id) {
   let bookings = PrepStorage.getBookings();
   let target = bookings.find(function (b) { return b.id === id; });
@@ -1815,6 +1795,7 @@ function rejectBooking(id) {
   renderAll();
 }
 
+// Cancels an existing interview booking request
 function cancelBooking(id) {
   let bookings = PrepStorage.getBookings();
   let target = bookings.find(function (b) { return b.id === id; });
@@ -1826,7 +1807,7 @@ function cancelBooking(id) {
   renderAll();
 }
 
-// Feedback Dialog helpers
+// Opens the post-session reflection and feedback modal
 function openFeedback(id) {
   let bookingIdInput = document.getElementById("feedback-booking-id");
   let feedbackForm = document.getElementById("feedback-form");
@@ -1845,6 +1826,7 @@ function openFeedback(id) {
   dialog.showModal();
 }
 
+// Saves peer ratings and comments for a completed session
 function saveFeedback(event) {
   event.preventDefault();
 
@@ -1872,7 +1854,7 @@ function saveFeedback(event) {
   renderAll();
 }
 
-// Switch main navigation tabs
+// Switches the active navigation tab and visible panel
 function switchTab(tabName) {
   renderAll();
 
@@ -1901,7 +1883,7 @@ function switchTab(tabName) {
   });
 }
 
-// Render all tabs
+// Re-renders all active tab views and reactive widgets
 function renderAll() {
   renderDashboard();
   renderQuestions();
@@ -1909,7 +1891,7 @@ function renderAll() {
   renderSchedule();
 }
 
-// Initialize page and attach event listeners
+// Attaches event listeners and initializes the application
 function initialize() {
   applyTheme(PrepStorage.getTheme());
 
@@ -1919,7 +1901,6 @@ function initialize() {
   identityInput.readOnly = Boolean(currentUserAccount);
   identityInput.value = currentUserAccount ? currentUserAccount.name : PrepStorage.getWhoami();
 
-  // Populate day dropdown in offer form
   let daySelect = document.querySelector('#offer-form select[name="day"]');
   if (daySelect) {
     let dayOptionsHtml = "";
@@ -1929,7 +1910,6 @@ function initialize() {
     daySelect.innerHTML = dayOptionsHtml;
   }
 
-  // Quick preset chips event listeners
   document.querySelectorAll("[data-preset-time]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       let presetTime = btn.getAttribute("data-preset-time");
@@ -1942,7 +1922,6 @@ function initialize() {
     });
   });
 
-  // Navigation tab buttons
   let navTabs = document.querySelectorAll(".tab");
   navTabs.forEach(function (tab) {
     tab.addEventListener("click", function () {
@@ -1950,7 +1929,6 @@ function initialize() {
     });
   });
 
-  // Quick action jump buttons (data-go="...")
   let goButtons = document.querySelectorAll("[data-go]");
   goButtons.forEach(function (btn) {
     btn.addEventListener("click", function () {
@@ -1958,7 +1936,6 @@ function initialize() {
     });
   });
 
-  // Auth switch buttons (Login / Sign up)
   let authTabs = document.querySelectorAll(".auth-tab");
   authTabs.forEach(function (tab) {
     tab.addEventListener("click", function () {
@@ -1966,7 +1943,6 @@ function initialize() {
     });
   });
 
-  // CS Core: Subject filter tabs
   document.querySelectorAll("[data-cs-subject]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       let subj = btn.getAttribute("data-cs-subject");
@@ -1978,7 +1954,6 @@ function initialize() {
     });
   });
 
-  // CS Core: Subject overview summary card clicks
   document.querySelectorAll("[data-filter-subject]").forEach(function (card) {
     card.addEventListener("click", function () {
       let subj = card.getAttribute("data-filter-subject");
@@ -1992,7 +1967,6 @@ function initialize() {
     });
   });
 
-  // CS Core: Status filter chips
   document.querySelectorAll("[data-cs-status]").forEach(function (chip) {
     chip.addEventListener("click", function () {
       let status = chip.getAttribute("data-cs-status");
@@ -2004,7 +1978,6 @@ function initialize() {
     });
   });
 
-  // CS Core: Difficulty filter
   let diffSelect = document.getElementById("cs-difficulty-select");
   if (diffSelect) {
     diffSelect.addEventListener("change", function () {
@@ -2013,7 +1986,6 @@ function initialize() {
     });
   }
 
-  // CS Core: Search input
   let searchInput = document.getElementById("cs-search-input");
   if (searchInput) {
     searchInput.addEventListener("input", function () {
@@ -2022,11 +1994,9 @@ function initialize() {
     });
   }
 
-  // CS Core: Topics container event delegation
   let csTopicsContainer = document.getElementById("cs-topics-container");
   if (csTopicsContainer) {
     csTopicsContainer.addEventListener("click", function (event) {
-      // Toggle complete checkbox
       let checkInput = event.target.closest("[data-cs-toggle]");
       if (checkInput) {
         let topicId = checkInput.getAttribute("data-cs-toggle");
@@ -2037,7 +2007,6 @@ function initialize() {
         return;
       }
 
-      // Bookmark button
       let bookmarkBtn = event.target.closest("[data-cs-bookmark]");
       if (bookmarkBtn) {
         let topicId = bookmarkBtn.getAttribute("data-cs-bookmark");
@@ -2048,7 +2017,6 @@ function initialize() {
         return;
       }
 
-      // Notes toggle button
       let notesBtn = event.target.closest("[data-cs-notes-toggle]");
       if (notesBtn) {
         let topicId = notesBtn.getAttribute("data-cs-notes-toggle");
@@ -2061,7 +2029,6 @@ function initialize() {
         return;
       }
 
-      // Save notes button
       let saveNotesBtn = event.target.closest("[data-cs-save-notes]");
       if (saveNotesBtn) {
         let topicId = saveNotesBtn.getAttribute("data-cs-save-notes");
@@ -2074,7 +2041,6 @@ function initialize() {
         return;
       }
 
-      // Add to Spaced Repetition (SM-2) button
       let sm2Btn = event.target.closest("[data-cs-add-sm2]");
       if (sm2Btn) {
         let topicId = sm2Btn.getAttribute("data-cs-add-sm2");
@@ -2084,7 +2050,6 @@ function initialize() {
     });
   }
 
-  // Forms
   document.getElementById("login-form").addEventListener("submit", handleLogin);
   document.getElementById("signup-form").addEventListener("submit", handleSignup);
   document.getElementById("logout-button").addEventListener("click", handleLogout);
@@ -2137,7 +2102,6 @@ function initialize() {
     document.getElementById("profile-dialog").close();
   });
 
-  // Offer slot toggle button
   let offerToggle = document.getElementById("offer-toggle");
   offerToggle.addEventListener("click", function () {
     let form = document.getElementById("offer-form");
@@ -2150,7 +2114,6 @@ function initialize() {
     }
   });
 
-  // Schedule grid actions delegation (book, remove, or quick offer from empty cell)
   document.getElementById("schedule-grid").addEventListener("click", function (event) {
     let bookBtn = event.target.closest("[data-book-slot]");
     if (bookBtn) {
@@ -2172,7 +2135,6 @@ function initialize() {
     }
   });
 
-  // Bookings table action buttons delegation
   document.getElementById("bookings-table-wrap").addEventListener("click", function (event) {
     let doneBtn = event.target.closest("[data-done]");
     let rejectBtn = event.target.closest("[data-reject]");
@@ -2185,7 +2147,6 @@ function initialize() {
     if (feedbackBtn) openFeedback(feedbackBtn.getAttribute("data-feedback"));
   });
 
-  // Close feedback dialog buttons
   document.getElementById("feedback-cancel").addEventListener("click", function () {
     document.getElementById("feedback-dialog").close();
   });
@@ -2193,7 +2154,6 @@ function initialize() {
     document.getElementById("feedback-dialog").close();
   });
 
-  // Slider outputs in feedback modal
   let sliderInputs = document.querySelectorAll(".sliders input");
   sliderInputs.forEach(function (slider) {
     slider.addEventListener("input", function () {
@@ -2202,7 +2162,6 @@ function initialize() {
     });
   });
 
-  // Identity input manual change (for guest mode)
   identityInput.addEventListener("input", function () {
     if (identityInput.readOnly) {
       identityInput.value = getCurrentAccount() ? getCurrentAccount().name : PrepStorage.getWhoami();
@@ -2228,7 +2187,6 @@ function initialize() {
     renderSchedule();
   });
 
-  // Window events
   window.addEventListener("storage", function () {
     setIdentityFromAccount();
     renderAll();
@@ -2238,7 +2196,6 @@ function initialize() {
   });
   window.addEventListener("focus", renderAll);
 
-  // Landing page action buttons (Get Started, Log in, Sign up)
   let authActionBtns = document.querySelectorAll("[data-auth-action]");
   authActionBtns.forEach(function (btn) {
     btn.addEventListener("click", function () {
@@ -2262,7 +2219,6 @@ function initialize() {
     landingThemeToggle.addEventListener("click", toggleTheme);
   }
 
-  // Initial user setup: Landing page appears first
   if (currentUserAccount) {
     leetCodeUsername = PrepStorage.getLeetCodeUsername();
     gfgUsername = PrepStorage.getGfgUsername() || leetCodeUsername;
@@ -2275,6 +2231,4 @@ function initialize() {
   renderAll();
 }
 
-// Start application
 initialize();
-

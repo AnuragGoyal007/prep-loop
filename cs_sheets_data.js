@@ -1,8 +1,4 @@
-// ============================================================
-// Striver's (takeUforward) Core CS Sheets Dataset
-// Covers: Operating Systems (OS), DBMS, Computer Networks (CN)
-// ============================================================
-
+// TakeUforward CS Core sheets dataset covering OS, DBMS, and Computer Networks
 const CS_SHEETS_DATA = (function () {
   const SUBJECTS = [
     { id: "os", name: "Operating Systems", shortName: "OS", color: "teal", icon: "⚙️" },
@@ -376,19 +372,23 @@ const CS_SHEETS_DATA = (function () {
     }
   ];
 
+  // Returns the list of supported CS Core subjects
   function getSubjects() {
     return SUBJECTS;
   }
 
+  // Returns all topics across all subjects
   function getAllTopics() {
     return TOPICS;
   }
 
+  // Filters topics by subject ID
   function getTopicsBySubject(subjectId) {
     if (!subjectId || subjectId === "all") return TOPICS;
     return TOPICS.filter(function (t) { return t.subject === subjectId; });
   }
 
+  // Finds a specific topic by its unique ID
   function getTopicById(id) {
     return TOPICS.find(function (t) { return t.id === id; }) || null;
   }
@@ -400,3 +400,10 @@ const CS_SHEETS_DATA = (function () {
     getTopicById: getTopicById
   };
 })();
+
+if (typeof window !== "undefined") {
+  window.CS_SHEETS_DATA = CS_SHEETS_DATA;
+}
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = CS_SHEETS_DATA;
+}
