@@ -161,6 +161,7 @@ function showAppScreen() {
   if (auth) auth.hidden = true;
   if (app) app.hidden = false;
 
+  switchTab("dashboard");
   setIdentityFromAccount();
   renderAll();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -350,6 +351,7 @@ function handleLogout() {
   gfgUsername = "";
   gfgCardVersion = "";
 
+  switchTab("dashboard");
   switchAuthMode("login");
   showLandingScreen();
   showToast("Logged out successfully.");
