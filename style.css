@@ -71,6 +71,9 @@ body.theme-dark .tag-os { background:#3b2456; color:#c5a0f5; border-color:#58348
 .time-24h { font-size:10px; font-family:"IBM Plex Mono",monospace; color:var(--ink-soft); }
 
 .slot-cell { display:flex; flex-direction:column; justify-content:space-between; border-top:0; border-left:0; color:var(--ink-soft); background:#fff; font-size:12px; position:relative; transition:background .15s ease; }
+.slot-cell-multi { justify-content:flex-start; gap:6px; padding:6px; overflow-y:auto; }
+.slot-offer { display:flex; flex-direction:column; justify-content:space-between; min-height:62px; padding:6px; border:1px solid var(--line); border-radius:6px; color:var(--ink-soft); background:#fff; }
+.slot-offer.is-open { background:var(--slate-soft); border-color:#b9c8dc; }.slot-offer.is-mine { background:var(--teal-soft); border-color:#b8d6cb; }.slot-offer.is-booked-mine { background:#fbf2e3; border-color:#e5ce9f; }.slot-offer.is-booked { background:#edf0ed; border-color:var(--line); }
 .slot-cell.is-empty { width:100%; border:0; border-right:1px solid var(--line); border-bottom:1px solid var(--line); background:#fff; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; color:#a3b0a7; }
 .slot-cell.is-empty:hover { background:#f4f7f4; color:var(--slate); border-color:var(--line); }
 .empty-plus { font-size:17px; line-height:1; font-weight:600; }
