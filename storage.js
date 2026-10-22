@@ -10,6 +10,8 @@ const PrepStorage = (function () {
     leetCodeProfiles: "prepLoop.leetCodeProfiles",
     gfgProfiles: "prepLoop.gfgProfiles",
     gfgCache: "prepLoop.gfgCache",
+    githubProfiles: "prepLoop.githubProfiles",
+    googleClientId: "prepLoop.googleClientId",
     csCoreProgress: "prepLoop.csCoreProgress"
   };
 
@@ -201,6 +203,40 @@ const PrepStorage = (function () {
     writeJSON(KEYS.gfgCache, nextCache);
   }
 
+  // Gets the saved GitHub handle for the active user
+  function getGithubUsername() {
+    let account = getCurrentUser();
+    if (!account || !account.id) return "";
+    let profiles = readJSON(KEYS.githubProfiles, {});
+    let saved = profiles && typeof profiles === "object" ? profiles[account.id] : "";
+    let val = typeof saved === "object" ? String(saved.username || "") : String(saved || account.github || account.githubUsername || "");
+    return val.replace(/^@/, "").trim();
+  }
+
+  // Saves the GitHub handle for the active user
+  function setGithubUsername(value) {
+    let account = getCurrentUser();
+    if (!account || !account.id) return;
+    let profiles = readJSON(KEYS.githubProfiles, {});
+    let nextProfiles = profiles && typeof profiles === "object" ? profiles : {};
+    nextProfiles[account.id] = String(value || "").replace(/^@/, "").trim();
+    writeJSON(KEYS.githubProfiles, nextProfiles);
+  }
+
+  // Gets optional custom Google OAuth Client ID
+  function getGoogleClientId() {
+    return localStorage.getItem(KEYS.googleClientId) || "";
+  }
+
+  // Sets custom Google OAuth Client ID
+  function setGoogleClientId(value) {
+    if (value && String(value).trim()) {
+      localStorage.setItem(KEYS.googleClientId, String(value).trim());
+    } else {
+      localStorage.removeItem(KEYS.googleClientId);
+    }
+  }
+
   // Helper resolving storage key for CS Core sheets progress
   function getCsUserKey() {
     return getUserStorageKey();
@@ -303,6 +339,10 @@ const PrepStorage = (function () {
     setGfgUsername: setGfgUsername,
     getGfgCache: getGfgCache,
     setGfgCache: setGfgCache,
+    getGithubUsername: getGithubUsername,
+    setGithubUsername: setGithubUsername,
+    getGoogleClientId: getGoogleClientId,
+    setGoogleClientId: setGoogleClientId,
     getCsCoreProgress: getCsCoreProgress,
     setCsCoreProgress: setCsCoreProgress,
     toggleCsTopicComplete: toggleCsTopicComplete,

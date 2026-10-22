@@ -24,6 +24,98 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .auth-row-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 @media (max-width:480px) { .auth-row-grid { grid-template-columns:1fr; } }
 .auth-button { width:100%; margin-top:6px; }
+
+/* Google OAuth & Auth divider styling */
+.google-auth-section { margin-bottom: 12px; position: relative; }
+.google-auth-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; background: #ffffff; color: #1f2937; border: 1px solid #d1d5db; border-radius: 9px; padding: 10px 14px; font-size: 14px; font-weight: 600; transition: all 0.15s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; }
+.google-auth-btn:hover { background: #f9fafb; border-color: #9ca3af; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+.google-svg { flex-shrink: 0; }
+.auth-divider { display: flex; align-items: center; text-align: center; margin: 14px 0 12px; color: var(--ink-soft); font-size: 11.5px; font-family: "IBM Plex Mono", monospace; }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--line); }
+.auth-divider span { padding: 0 10px; }
+.google-verified-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--teal-soft); border: 1px solid var(--teal); border-radius: 8px; margin-bottom: 14px; }
+.google-verified-badge { width: 22px; height: 22px; border-radius: 50%; background: var(--teal); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.google-verified-info { flex: 1; font-size: 12px; line-height: 1.35; color: var(--ink); }
+.google-verified-info strong { display: block; font-size: 12.5px; }
+.google-verified-info span { color: var(--teal); font-family: "IBM Plex Mono", monospace; }
+.google-unlink-btn { background: transparent; border: 0; color: var(--ink-soft); font-size: 11.5px; text-decoration: underline; cursor: pointer; padding: 0; }
+.google-unlink-btn:hover { color: var(--red); }
+.auth-row-three { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 520px) { .auth-row-three { grid-template-columns: 1fr; } }
+
+/* Dialog Backdrop & Base Modal */
+dialog::backdrop {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+}
+dialog:not([open]) {
+  display: none !important;
+}
+
+/* Google Auth Modal (Responsive, Authentic, Never Trapped) */
+.google-auth-dialog {
+  width: min(450px, calc(100vw - 32px));
+  max-height: 90vh;
+  margin: auto;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  padding: 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  overflow-y: auto;
+}
+.google-modal-inner { padding: 24px 22px 20px; }
+.google-modal-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; position: relative; }
+.google-modal-titles { flex: 1; min-width: 0; }
+.google-modal-header h3 { font: 600 19px "Fraunces", serif; margin: 0 0 3px; letter-spacing: -0.4px; }
+.google-modal-sub { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.google-modal-header .icon-button { margin-left: auto; background: transparent; border: 0; font-size: 22px; line-height: 1; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.google-modal-header .icon-button:hover { background: var(--bg); color: var(--ink); }
+
+.google-accounts-list { display: grid; gap: 9px; margin-bottom: 14px; }
+.google-account-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); width: 100%; text-align: left; cursor: pointer; transition: all 0.15s ease; }
+.google-account-item:hover { background: var(--bg); border-color: var(--slate); transform: translateX(2px); }
+.google-avatar-circle { width: 36px; height: 36px; border-radius: 50%; color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 15px; flex-shrink: 0; }
+.google-account-meta { flex: 1; min-width: 0; }
+.google-account-meta strong { display: block; font-size: 13.5px; color: var(--ink); }
+.google-account-meta span { font-size: 12px; color: var(--ink-soft); font-family: "IBM Plex Mono", monospace; }
+.google-verify-tag { font: 600 10.5px "IBM Plex Mono", monospace; color: var(--teal); background: var(--teal-soft); padding: 3px 8px; border-radius: 999px; text-transform: uppercase; }
+
+.google-setup-card { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+.google-setup-info { margin: 0 0 10px; font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
+.google-input-label { display: block; font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.google-config-row { display: flex; gap: 8px; }
+.google-config-row input { flex: 1; min-width: 0; padding: 8px 10px; font-size: 12px; font-family: "IBM Plex Mono", monospace; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.google-config-row button { padding: 8px 14px; font-size: 12.5px; white-space: nowrap; }
+.google-config-status { display: block; margin-top: 6px; font-size: 11px; font-family: "IBM Plex Mono", monospace; color: var(--teal); }
+
+.google-steps-box { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 11.5px; color: var(--ink-soft); }
+.google-steps-title { margin: 0 0 6px; color: var(--ink); }
+.google-steps-list { margin: 0; padding-left: 18px; line-height: 1.5; }
+.google-steps-list li { margin-bottom: 3px; }
+.google-steps-list a { color: var(--slate); font-weight: 600; }
+
+.google-custom-divider { display: flex; align-items: center; text-align: center; margin: 12px 0; color: var(--ink-soft); font-size: 10.5px; font-family: "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: 0.05em; }
+.google-custom-divider::before, .google-custom-divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--line); }
+.google-custom-divider span { padding: 0 8px; }
+
+.google-demo-fallback-box { margin-bottom: 10px; }
+.google-demo-note { margin: 0 0 8px; font-size: 11.5px; color: var(--ink-soft); }
+
+.google-security-notice { margin: 12px 0 0; font-size: 11px; line-height: 1.4; color: var(--ink-soft); text-align: center; }
+
+/* GitHub Badge on Profile Card */
+.profile-social-links { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.profile-social-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font: 500 11.5px "IBM Plex Mono", monospace; text-decoration: none; border: 1px solid var(--line); transition: all 0.12s ease; }
+.profile-social-pill.github { background: #24292e; color: #ffffff; border-color: #24292e; }
+.profile-social-pill.github:hover { background: #000000; border-color: #000000; }
+.profile-social-pill.leetcode { background: #FFF4E5; color: #FFA116; border-color: #FFE0B2; }
+.profile-social-pill.leetcode:hover { background: #FFE0B2; }
+.profile-social-pill.gfg { background: #E8F5E9; color: #2E7D32; border-color: #C8E6C9; }
+.profile-social-pill.gfg:hover { background: #C8E6C9; }
+.profile-verified-google-badge { font: 600 10px "IBM Plex Mono", monospace; color: var(--teal); background: var(--teal-soft); border: 1px solid var(--teal); padding: 2px 7px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; margin-left: 6px; }
+
 .app-shell { width:min(1160px, calc(100% - 48px)); margin:0 auto; padding:52px 0 72px; }.panel[hidden] { display:none; }.section-intro { max-width:670px; margin-bottom:30px; }.eyebrow { margin:0 0 6px; color:var(--ink-soft); font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:500; letter-spacing:.09em; text-transform:uppercase; }.section-intro h1 { margin:0 0 9px; font:600 clamp(34px,5vw,53px)/1.02 "Fraunces",serif; letter-spacing:-1.9px; }.section-intro p:not(.eyebrow) { margin:0; color:var(--ink-soft); font-size:17px; }
 .card,.horizon-card { border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); }.horizon-card { min-height:232px; padding:23px 25px 20px; }.card { padding:22px 24px; }.card-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; }.card-heading h2 { margin:0; font:600 22px/1.1 "Fraunces",serif; letter-spacing:-.55px; }.data-note,.unit { color:var(--ink-soft); font:400 11px "IBM Plex Mono",monospace; }.text-action { padding:0; border:0; background:transparent; color:var(--slate); font-size:13px; font-weight:600; text-decoration:underline; text-underline-offset:3px; }.text-action:hover { color:var(--ink); }.count-badge { display:inline-grid; min-width:22px; place-items:center; padding:2px 6px; border-radius:999px; color:#805512; background:var(--amber-soft); vertical-align:2px; font:500 11px "IBM Plex Mono",monospace; }.count-badge.slate { color:var(--slate); background:var(--slate-soft); }
 .profile-heading,.profile-identity,.profile-stats { display:flex; align-items:center; }.profile-heading { justify-content:space-between; gap:18px; }.profile-card-actions { display:flex; align-items:center; gap:14px; }.profile-identity { gap:16px; min-width:0; }.profile-avatar { flex:0 0 68px; width:68px; height:68px; overflow:hidden; display:grid; place-items:center; border:1px solid var(--teal); border-radius:50%; color:var(--teal); background:var(--teal-soft); font:600 22px "Fraunces",serif; }.profile-avatar img { width:100%; height:100%; object-fit:cover; }.profile-avatar-large { width:88px; height:88px; flex-basis:88px; }.profile-initials { line-height:1; }.profile-heading h2 { margin:0; font:600 27px/1.05 "Fraunces",serif; letter-spacing:-.6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.profile-email { margin:5px 0 0; color:var(--ink-soft); font:400 12px "IBM Plex Mono",monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.profile-status,.profile-label { color:var(--ink-soft); font:500 10px "IBM Plex Mono",monospace; text-transform:uppercase; letter-spacing:.06em; }.profile-status { padding:5px 8px; border-radius:999px; color:var(--teal); background:var(--teal-soft); white-space:nowrap; }.profile-details { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:22px 0 19px; padding:16px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }.profile-details div { min-width:0; }.profile-label { display:block; margin-bottom:4px; }.profile-details strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }.profile-stats { gap:0; justify-content:space-between; }.profile-stats div { display:grid; gap:2px; min-width:0; }.profile-stats strong { font:600 20px "IBM Plex Mono",monospace; }.profile-stats span { color:var(--ink-soft); font-size:11px; }
@@ -424,6 +516,17 @@ body.theme-dark .cs-icon-btn { background:var(--surface); border-color:var(--lin
 body.theme-dark .cs-icon-btn.bookmark-btn.is-active { background:#3b2910; color:#fcd34d; border-color:#78350f; }
 body.theme-dark .dash-cs-hot-alert { background:#3b2910; color:#fcd34d; border-color:#78350f; }
 body.theme-dark .dash-cs-hot-alert.done { background:#192e24; color:#7ce0b8; border-color:var(--teal); }
+
+body.theme-dark .google-auth-btn { background:#202B26; color:var(--ink); border-color:var(--line); box-shadow:none; }
+body.theme-dark .google-auth-btn:hover { background:#2A3932; border-color:var(--ink-soft); }
+body.theme-dark .google-auth-dialog { background:var(--surface); border-color:var(--line); box-shadow:0 24px 60px rgba(0,0,0,0.5); }
+body.theme-dark .google-account-item { background:#202B26; border-color:var(--line); }
+body.theme-dark .google-account-item:hover { background:#2A3932; border-color:var(--slate); }
+body.theme-dark .google-setup-card { background:#18231F; border-color:var(--line); }
+body.theme-dark .google-steps-box { border-top-color:var(--line); }
+body.theme-dark .google-config-row input { background:#16211D; color:var(--ink); border-color:var(--line); }
+body.theme-dark .google-verified-banner { background:#192e24; border-color:var(--teal); }
+body.theme-dark .profile-verified-google-badge { background:#192e24; color:#7ce0b8; border-color:var(--teal); }
 
 
 
