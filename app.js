@@ -2,6 +2,10 @@ let leetCodeUsername = "";
 let leetCardVersion = "";
 let gfgUsername = "";
 let gfgCardVersion = "";
+let githubUsername = "";
+let googlePendingAuth = null;
+let googleTokenClient = null;
+const GOOGLE_CLIENT_ID = window.PREPLOOP_GOOGLE_CLIENT_ID || "58800374773-d75om7gtvtvasnc4m1jfej1u20nusmek.apps.googleusercontent.com";
 let toastTimer = null;
 let gfgFetchSeq = 0;
 
@@ -248,6 +252,11 @@ function switchAuthMode(mode) {
   let loginForm = document.getElementById("login-form");
   let signupForm = document.getElementById("signup-form");
   let authTabs = document.querySelectorAll(".auth-tab");
+  let googleBtnText = document.getElementById("google-btn-text");
+
+  if (googleBtnText) {
+    googleBtnText.textContent = mode === "login" ? "Continue with Google" : "Sign up with Google";
+  }
 
   if (mode === "login") {
     loginForm.hidden = false;
@@ -267,6 +276,320 @@ function switchAuthMode(mode) {
       tab.setAttribute("aria-selected", "false");
     }
   });
+}
+
+// Decodes a base64url-encoded JWT from Google Identity Services
+function decodeGoogleJwt(token) {
+  try {
+    let base64Url = token.split(".")[1];
+    let base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    let jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map(function (c) {
+          return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+        })
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch (err) {
+    return null;
+  }
+}
+
+// Resolves effective Google Client ID (custom from storage, or global preset)
+function getEffectiveGoogleClientId() {
+  let custom = (typeof PrepStorage !== "undefined" && PrepStorage.getGoogleClientId) ? PrepStorage.getGoogleClientId() : "";
+  if (custom && !custom.includes("placeholder")) {
+    return custom;
+  }
+  return GOOGLE_CLIENT_ID || window.PREPLOOP_GOOGLE_CLIENT_ID || "";
+}
+
+// Initializes official Google Identity Services & OAuth 2.0 Token Client
+function initGoogleAuth() {
+  let clientId = getEffectiveGoogleClientId();
+  if (!clientId || clientId.includes("placeholder")) {
+    return;
+  }
+
+  if (typeof google === "undefined" || !google.accounts) return;
+
+  // 1. Initialize OAuth 2.0 Token Client (Official Google Account Chooser Popup)
+  if (google.accounts.oauth2) {
+    try {
+      googleTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: "openid profile email",
+        callback: handleGoogleTokenResponse
+      });
+    } catch (e) {
+      console.warn("GIS token client init:", e);
+    }
+  }
+
+  // 2. Initialize Google Identity Services (One-Tap & Rendered button)
+  if (google.accounts.id) {
+    try {
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleCredentialResponse,
+        auto_select: false
+      });
+      let slot = document.getElementById("g_id_signin_slot");
+      if (slot && window.location.protocol.startsWith("http")) {
+        slot.innerHTML = "";
+        google.accounts.id.renderButton(slot, {
+          theme: "outline",
+          size: "large",
+          type: "standard",
+          shape: "pill",
+          text: "continue_with",
+          logo_alignment: "left",
+          width: 320
+        });
+      }
+    } catch (e) {
+      // Origin not registered or file:// protocol
+    }
+  }
+}
+
+// Callback handler for official Google OAuth 2.0 Token popup
+async function handleGoogleTokenResponse(tokenResponse) {
+  if (!tokenResponse) return;
+  if (tokenResponse.error) {
+    showToast("Google sign in was cancelled or denied: " + tokenResponse.error);
+    return;
+  }
+  if (!tokenResponse.access_token) {
+    showToast("Google sign in did not return an access token.");
+    return;
+  }
+
+  showToast("Fetching verified Google profile...");
+
+  try {
+    let res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: {
+        Authorization: "Bearer " + tokenResponse.access_token
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error("HTTP error " + res.status);
+    }
+
+    let profile = await res.json();
+    if (!profile || !profile.email) {
+      showToast("Could not retrieve email from Google profile.");
+      return;
+    }
+
+    processGoogleUser({
+      name: profile.name || profile.given_name || "Google User",
+      email: profile.email,
+      avatar: profile.picture || "",
+      googleId: profile.sub || ""
+    });
+  } catch (err) {
+    console.error("Google userinfo fetch error:", err);
+    showToast("Could not connect to Google profile services.");
+  }
+}
+
+// Callback handler for official Google Identity Services (JWT) response
+function handleGoogleCredentialResponse(response) {
+  if (!response || !response.credential) return;
+  let payload = decodeGoogleJwt(response.credential);
+  if (!payload || !payload.email) {
+    showToast("Could not verify Google identity.");
+    return;
+  }
+  processGoogleUser({
+    name: payload.name || payload.given_name || "Google User",
+    email: payload.email,
+    avatar: payload.picture || "",
+    googleId: payload.sub || ""
+  });
+}
+
+// Safely displays Google OAuth setup modal with optional message
+function openGoogleAuthModal(msg) {
+  let modal = document.getElementById("google-auth-dialog");
+  if (!modal) return;
+  let customIdInput = document.getElementById("google-client-id-input");
+  if (customIdInput && typeof PrepStorage !== "undefined" && PrepStorage.getGoogleClientId) {
+    customIdInput.value = PrepStorage.getGoogleClientId();
+  }
+  let msgElem = document.getElementById("google-modal-msg");
+  if (msgElem && msg) {
+    msgElem.textContent = msg;
+  }
+  try {
+    if (typeof modal.showModal === "function") {
+      modal.showModal();
+    } else {
+      modal.setAttribute("open", "");
+    }
+  } catch (err) {
+    modal.setAttribute("open", "");
+  }
+}
+
+// Triggers official Google OAuth Sign In dialog
+function triggerGoogleAuth() {
+  // Check if running on file:///
+  if (window.location.protocol === "file:") {
+    showToast("Google OAuth requires an HTTP server (e.g. localhost or Vercel). Google blocks file://");
+    openGoogleAuthModal("Google OAuth blocks file:// URLs. Open PrepLoop via Live Server (http://localhost:5500) or deploy to Vercel.");
+    return;
+  }
+
+  let clientId = getEffectiveGoogleClientId();
+  if (!clientId || clientId.includes("placeholder")) {
+    openGoogleAuthModal("Enter your Google Cloud Web Client ID to connect directly to accounts.google.com");
+    return;
+  }
+
+  // 1. Try launching Google OAuth 2.0 popup window
+  if (typeof google !== "undefined" && google.accounts && google.accounts.oauth2) {
+    if (!googleTokenClient) {
+      initGoogleAuth();
+    }
+    if (googleTokenClient) {
+      try {
+        googleTokenClient.requestAccessToken({ prompt: "select_account" });
+        return;
+      } catch (err) {
+        console.warn("Failed to request access token via tokenClient:", err);
+      }
+    }
+  }
+
+  // 2. Fallback to GIS prompt if available
+  if (typeof google !== "undefined" && google.accounts && google.accounts.id) {
+    try {
+      google.accounts.id.prompt(function (notification) {
+        if (notification && (notification.isNotDisplayed() || notification.isSkippedMoment())) {
+          openGoogleAuthModal("Google One-Tap is blocked or origin is unlisted. Please check your Authorized JavaScript Origins.");
+        }
+      });
+      return;
+    } catch (e) {
+      console.warn("GIS prompt fallback error:", e);
+    }
+  }
+
+  openGoogleAuthModal("Google Identity script is loading. Please check your internet connection.");
+}
+
+// Processes a verified Google account: logs in if existing, or pre-fills and prompts new user
+function processGoogleUser(googleData) {
+  let modal = document.getElementById("google-auth-dialog");
+  if (modal && modal.open) {
+    modal.close();
+  }
+
+  let cleanEmail = String(googleData.email || "").trim().toLowerCase();
+  let cleanName = String(googleData.name || "").trim();
+
+  if (!cleanEmail) {
+    showToast("Please provide a valid Google email address.");
+    return;
+  }
+
+  let users = PrepStorage.getUsers();
+  let existingUser = users.find(function (u) {
+    return u.email && u.email.trim().toLowerCase() === cleanEmail;
+  });
+
+  if (existingUser) {
+    if (googleData.avatar && !existingUser.avatar && !existingUser.profilePhoto) {
+      existingUser.avatar = googleData.avatar;
+      existingUser.profilePhoto = googleData.avatar;
+    }
+    existingUser.isGoogle = true;
+    existingUser.googleId = googleData.googleId || existingUser.googleId || "google-" + Date.now();
+
+    let userIdx = users.findIndex(function (u) { return u.email === existingUser.email; });
+    if (userIdx >= 0) {
+      users[userIdx] = existingUser;
+      PrepStorage.setUsers(users);
+    }
+
+    PrepStorage.setCurrentUser(existingUser);
+    PrepStorage.setWhoami(existingUser.name || existingUser.email);
+
+    let identityInput = document.getElementById("identity-input");
+    if (identityInput) {
+      identityInput.value = existingUser.name || existingUser.email;
+      identityInput.readOnly = true;
+    }
+
+    setIdentityFromAccount();
+    showAppScreen();
+
+    leetCodeUsername = PrepStorage.getLeetCodeUsername() || existingUser.leetcode || "";
+    gfgUsername = PrepStorage.getGfgUsername() || existingUser.gfg || "";
+    githubUsername = PrepStorage.getGithubUsername() || existingUser.github || "";
+
+    renderAll();
+    showToast(`Welcome back, ${existingUser.name || "there"}! (Verified via Google)`);
+    return;
+  }
+
+  // User is new: pre-fill and require academic registration fields
+  googlePendingAuth = {
+    name: cleanName,
+    email: cleanEmail,
+    avatar: googleData.avatar || "",
+    googleId: googleData.googleId || "google-" + Date.now()
+  };
+
+  switchAuthMode("signup");
+
+  let signupForm = document.getElementById("signup-form");
+  if (signupForm) {
+    signupForm.elements["name"].value = cleanName;
+    signupForm.elements["email"].value = cleanEmail;
+    signupForm.elements["name"].readOnly = true;
+    signupForm.elements["email"].readOnly = true;
+
+    if (!signupForm.elements["password"].value) {
+      signupForm.elements["password"].value = "GoogleAuth@" + cleanEmail.split("@")[0].slice(0, 4);
+    }
+
+    let verifiedBanner = document.getElementById("google-verified-banner");
+    let verifiedEmailElem = document.getElementById("google-verified-email");
+    if (verifiedBanner && verifiedEmailElem) {
+      verifiedEmailElem.textContent = `${cleanEmail} (Verified)`;
+      verifiedBanner.hidden = false;
+    }
+
+    setTimeout(function () {
+      let uniInput = signupForm.elements["university"];
+      if (uniInput) {
+        uniInput.focus();
+      }
+    }, 150);
+  }
+
+  showToast(`Google account verified! Please enter your university and academic details to complete registration.`);
+}
+
+// Clears Google pre-fill state and allows manual registration
+function clearGooglePendingAuth() {
+  googlePendingAuth = null;
+  let signupForm = document.getElementById("signup-form");
+  if (signupForm) {
+    signupForm.elements["name"].readOnly = false;
+    signupForm.elements["email"].readOnly = false;
+    let verifiedBanner = document.getElementById("google-verified-banner");
+    if (verifiedBanner) {
+      verifiedBanner.hidden = true;
+    }
+  }
 }
 
 // Validates credentials and logs in user
@@ -308,6 +631,7 @@ function handleLogin(event) {
   leetCardVersion = "";
   gfgUsername = PrepStorage.getGfgUsername() || leetCodeUsername;
   gfgCardVersion = "";
+  githubUsername = PrepStorage.getGithubUsername();
 
   renderAll();
   showToast(`Welcome back, ${foundUser.name || "there"}!`);
@@ -326,6 +650,12 @@ function handleSignup(event) {
   let year = form.elements["year"] ? form.elements["year"].value.trim() : "";
   let leetcode = form.elements["leetcode"] ? form.elements["leetcode"].value.trim() : "";
   let gfg = form.elements["gfg"] ? form.elements["gfg"].value.trim() : "";
+  let github = form.elements["github"] ? form.elements["github"].value.trim().replace(/^@/, "") : "";
+
+  // If registering via verified Google account, allow auto-generated password if user left it blank
+  if (googlePendingAuth && (!password || password.length < 4)) {
+    password = "GoogleAuth@" + googlePendingAuth.email.split("@")[0].slice(0, 4) + "!" + String(Date.now()).slice(-4);
+  }
 
   if (!name || !email || !password || !university || !course || !year) {
     showToast("Please fill in all mandatory fields (Name, Email, Password, University, Course, Year).");
@@ -355,8 +685,21 @@ function handleSignup(event) {
     university: university,
     course: course,
     courseRole: course,
-    year: year
+    year: year,
+    leetcode: leetcode,
+    gfg: gfg,
+    github: github,
+    githubUsername: github
   };
+
+  if (googlePendingAuth) {
+    newUser.isGoogle = true;
+    newUser.googleId = googlePendingAuth.googleId;
+    if (googlePendingAuth.avatar) {
+      newUser.avatar = googlePendingAuth.avatar;
+      newUser.profilePhoto = googlePendingAuth.avatar;
+    }
+  }
 
   users.push(newUser);
   PrepStorage.setUsers(users);
@@ -381,6 +724,14 @@ function handleSignup(event) {
     gfgCardVersion = "";
   }
 
+  if (github) {
+    PrepStorage.setGithubUsername(github);
+    githubUsername = github;
+  } else {
+    githubUsername = "";
+  }
+
+  clearGooglePendingAuth();
   form.reset();
 
   let identityInput = document.getElementById("identity-input");
@@ -412,6 +763,8 @@ function handleLogout() {
   leetCardVersion = "";
   gfgUsername = "";
   gfgCardVersion = "";
+  githubUsername = "";
+  clearGooglePendingAuth();
 
   switchTab("dashboard");
   switchAuthMode("login");
@@ -440,7 +793,24 @@ function renderProfileCard(questions, bookings, slots) {
     let slot = slots.find(function (item) { return item.id === booking.slotId; });
     return slot && (Scheduler.samePerson(slot.hostName, currentUser) || Scheduler.samePerson(booking.requesterName, currentUser));
   }).length;
-  let connectedPlatforms = (PrepStorage.getLeetCodeUsername() ? 1 : 0) + (PrepStorage.getGfgUsername() ? 1 : 0);
+
+  let leetCodeUser = PrepStorage.getLeetCodeUsername() || account.leetcode || "";
+  let gfgUser = PrepStorage.getGfgUsername() || account.gfg || "";
+  let githubUser = PrepStorage.getGithubUsername() || account.github || account.githubUsername || "";
+  let connectedPlatforms = (leetCodeUser ? 1 : 0) + (gfgUser ? 1 : 0) + (githubUser ? 1 : 0);
+  let isGoogleUser = Boolean(account.isGoogle || account.googleId);
+
+  let socialPillsHtml = "";
+  if (githubUser || leetCodeUser || gfgUser) {
+    socialPillsHtml = `
+      <div class="profile-social-links">
+        ${githubUser ? `<a class="profile-social-pill github" href="https://github.com/${escapeHtml(githubUser)}" target="_blank" rel="noopener" title="GitHub: @${escapeHtml(githubUser)}"><span>🐙</span> @${escapeHtml(githubUser)}</a>` : ""}
+        ${leetCodeUser ? `<a class="profile-social-pill leetcode" href="https://leetcode.com/${escapeHtml(leetCodeUser)}" target="_blank" rel="noopener" title="LeetCode: @${escapeHtml(leetCodeUser)}"><span>⚡</span> LC: @${escapeHtml(leetCodeUser)}</a>` : ""}
+        ${gfgUser ? `<a class="profile-social-pill gfg" href="https://www.geeksforgeeks.org/user/${escapeHtml(gfgUser)}" target="_blank" rel="noopener" title="GeeksforGeeks: @${escapeHtml(gfgUser)}"><span>🟢</span> GFG: @${escapeHtml(gfgUser)}</a>` : ""}
+      </div>
+    `;
+  }
+
   let photo = account.avatar || account.photo || account.profilePhoto || account.avatarUrl || "";
   let initials = String(currentUser || "?").trim().split(/\s+/).map(function (part) { return part.charAt(0); }).join("").slice(0, 2).toUpperCase();
   let displayValue = function (keys) {
@@ -460,7 +830,7 @@ function renderProfileCard(questions, bookings, slots) {
       <div class="profile-identity">
         <div class="profile-avatar" aria-hidden="true">${avatarHtml}</div>
         <div>
-          <p class="eyebrow">Your profile</p>
+          <p class="eyebrow">Your profile ${isGoogleUser ? '<span class="profile-verified-google-badge" title="Identity verified by Google OAuth">✓ Google</span>' : ''}</p>
           <h2 id="profile-title">${escapeHtml(currentUser)}</h2>
           <p class="profile-email">${escapeHtml(account.email || "Not provided")}</p>
         </div>
@@ -472,11 +842,12 @@ function renderProfileCard(questions, bookings, slots) {
       <div><span class="profile-label">University</span><strong>${displayValue(["university", "college", "institution"])}</strong></div>
       <div><span class="profile-label">Year</span><strong>${displayValue(["year", "studyYear", "graduationYear"])}</strong></div>
     </div>
+    ${socialPillsHtml}
     <div class="profile-stats" aria-label="Profile statistics">
       <div><strong>${questions.length}</strong><span>Questions</span></div>
       <div><strong>${dueCount}</strong><span>Due now</span></div>
       <div><strong>${sessionCount}</strong><span>Sessions</span></div>
-      <div><strong>${connectedPlatforms}/2</strong><span>Platforms</span></div>
+      <div><strong>${connectedPlatforms}/3</strong><span>Platforms</span></div>
     </div>
   `;
 }
@@ -514,6 +885,9 @@ function openProfileEditor() {
   form.elements["university"].value = getAccountProfileValue(account, ["university", "college", "institution"]);
   form.elements["year"].value = getAccountProfileValue(account, ["year", "studyYear", "graduationYear"]);
   form.elements["courseRole"].value = getAccountProfileValue(account, ["course", "role", "courseRole"]);
+  if (form.elements["github"]) {
+    form.elements["github"].value = PrepStorage.getGithubUsername() || account.github || account.githubUsername || "";
+  }
   form.elements["photo"].value = "";
   preview.innerHTML = getProfileAvatarMarkup(account);
   dialog.showModal();
@@ -527,13 +901,25 @@ function saveProfile(event) {
   let form = event.target;
   if (!account) return;
 
+  let githubVal = form.elements["github"] ? form.elements["github"].value.trim().replace(/^@/, '') : "";
   let updatedAccount = {
     ...account,
     university: form.elements["university"].value.trim(),
     year: form.elements["year"].value.trim(),
     course: form.elements["courseRole"].value.trim(),
-    courseRole: form.elements["courseRole"].value.trim()
+    courseRole: form.elements["courseRole"].value.trim(),
+    github: githubVal,
+    githubUsername: githubVal
   };
+
+  if (githubVal) {
+    PrepStorage.setGithubUsername(githubVal);
+    githubUsername = githubVal;
+  } else {
+    PrepStorage.setGithubUsername("");
+    githubUsername = "";
+  }
+
   let photoFile = form.elements["photo"].files[0];
 
   let finishSave = function (profilePhoto) {
@@ -2219,9 +2605,77 @@ function initialize() {
     landingThemeToggle.addEventListener("click", toggleTheme);
   }
 
+  let googleTriggerBtn = document.getElementById("google-auth-trigger-btn");
+  if (googleTriggerBtn) {
+    googleTriggerBtn.addEventListener("click", triggerGoogleAuth);
+  }
+
+  let googleUnlinkBtn = document.getElementById("google-unlink-btn");
+  if (googleUnlinkBtn) {
+    googleUnlinkBtn.addEventListener("click", clearGooglePendingAuth);
+  }
+
+  let googleModalCloseBtn = document.getElementById("google-modal-close");
+  let googleAuthModal = document.getElementById("google-auth-dialog");
+  if (googleModalCloseBtn && googleAuthModal) {
+    googleModalCloseBtn.addEventListener("click", function () {
+      googleAuthModal.close();
+    });
+  }
+
+  if (googleAuthModal) {
+    googleAuthModal.addEventListener("click", function (event) {
+      if (event.target === googleAuthModal) {
+        googleAuthModal.close();
+      }
+    });
+  }
+
+  let googleClientIdForm = document.getElementById("google-client-id-form");
+  if (googleClientIdForm) {
+    googleClientIdForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      let input = document.getElementById("google-client-id-input");
+      let status = document.getElementById("google-client-id-status");
+      let val = input ? input.value.trim() : "";
+      if (!val) {
+        showToast("Please enter a valid Google Cloud Client ID.");
+        return;
+      }
+      if (typeof PrepStorage !== "undefined" && PrepStorage.setGoogleClientId) {
+        PrepStorage.setGoogleClientId(val);
+      }
+      initGoogleAuth();
+      if (status) {
+        status.textContent = "✓ Client ID saved! Launching Google Sign-In...";
+      }
+      showToast("Google Client ID saved! Opening official Google Sign-In dialog...");
+      let modal = document.getElementById("google-auth-dialog");
+      if (modal && modal.open) modal.close();
+      setTimeout(function () {
+        triggerGoogleAuth();
+      }, 250);
+    });
+  }
+
+  let googleDemoBtn = document.getElementById("google-demo-auth-btn");
+  if (googleDemoBtn) {
+    googleDemoBtn.addEventListener("click", function () {
+      processGoogleUser({
+        name: "Anurag Goyal",
+        email: "anurag.goyal.prep@gmail.com",
+        avatar: "https://lh3.googleusercontent.com/a/ACg8ocL-demo-avatar",
+        googleId: "google-demo-849201"
+      });
+    });
+  }
+
+  initGoogleAuth();
+
   if (currentUserAccount) {
     leetCodeUsername = PrepStorage.getLeetCodeUsername();
     gfgUsername = PrepStorage.getGfgUsername() || leetCodeUsername;
+    githubUsername = PrepStorage.getGithubUsername();
     if (gfgUsername && !PrepStorage.getGfgUsername()) {
       PrepStorage.setGfgUsername(gfgUsername);
     }
