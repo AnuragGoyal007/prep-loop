@@ -608,6 +608,59 @@ async function syncQuestionsFromBackend() {
   }
 }
 
+// Synchronizes interview slots and bookings from MongoDB backend
+async function syncSchedulerFromBackend() {
+  if (typeof PrepAPI === "undefined") return;
+  try {
+    let [slotsRes, bookingsRes] = await Promise.all([
+      PrepAPI.scheduler.getSlots(),
+      PrepAPI.scheduler.getBookings()
+    ]);
+
+    if (slotsRes.success && Array.isArray(slotsRes.data) && slotsRes.data.length > 0) {
+      let backendSlots = slotsRes.data.map(s => ({
+        ...s,
+        id: s._id || s.id
+      }));
+      PrepStorage.setSlots(backendSlots);
+    }
+
+    if (bookingsRes.success && Array.isArray(bookingsRes.data) && bookingsRes.data.length > 0) {
+      let backendBookings = bookingsRes.data.map(b => ({
+        ...b,
+        id: b._id || b.id,
+        slotId: b.slotId?._id || b.slotId
+      }));
+      PrepStorage.setBookings(backendBookings);
+    }
+  } catch (err) {
+    console.warn("Scheduler backend sync error:", err);
+  }
+}
+
+// Live Backend Health Indicator update
+async function updateBackendStatusIndicator() {
+  if (typeof PrepAPI === "undefined") return;
+  try {
+    let isOnline = await PrepAPI.isBackendOnline();
+    let badges = [document.getElementById("backend-status-pill"), document.getElementById("landing-backend-pill")];
+    badges.forEach(pill => {
+      if (!pill) return;
+      if (isOnline) {
+        pill.className = "backend-status-badge online";
+        pill.innerHTML = `<span class="status-dot"></span><span class="status-text">MongoDB Live</span>`;
+        pill.title = "Connected to Express.js REST API & MongoDB Database";
+      } else {
+        pill.className = "backend-status-badge offline";
+        pill.innerHTML = `<span class="status-dot"></span><span class="status-text">Local Storage Mode</span>`;
+        pill.title = "Backend offline — running local-first mode";
+      }
+    });
+  } catch (e) {
+    // Ignore error
+  }
+}
+
 // Validates credentials and logs in user (tries MongoDB backend first)
 async function handleLogin(event) {
   event.preventDefault();
@@ -2105,6 +2158,17 @@ function onOfferSubmit(event) {
   PrepStorage.setSlots(slots);
   showToast(`Added open slot for ${day} at ${Scheduler.formatDisplayTime(normalizedTime)}!`);
 
+  // Sync to MongoDB Backend
+  if (typeof PrepAPI !== "undefined") {
+    PrepAPI.scheduler.createSlot({
+      hostName: user,
+      day: day,
+      time: normalizedTime,
+      tag: topic || "DSA",
+      link: ""
+    }).catch(err => console.warn("Could not save slot to backend:", err));
+  }
+
   form.elements["topic"].value = "";
   renderAll();
 }
@@ -2214,6 +2278,13 @@ function tryBooking(slotId) {
   bookings.push(newBooking);
   PrepStorage.setBookings(bookings);
   showToast(`Booked ${targetSlot.hostName}’s ${targetSlot.day} ${Scheduler.formatDisplayTime(targetSlot.time)} session.`);
+
+  // Sync to MongoDB Backend
+  if (typeof PrepAPI !== "undefined" && targetSlot) {
+    let mongoSlotId = targetSlot._id || targetSlot.id;
+    PrepAPI.scheduler.bookSlot(mongoSlotId, user).catch(err => console.warn("Could not sync booking to backend:", err));
+  }
+
   renderAll();
 }
 
@@ -2306,6 +2377,17 @@ function saveFeedback(event) {
   };
 
   PrepStorage.setBookings(bookings);
+
+  // Sync feedback to MongoDB
+  if (typeof PrepAPI !== "undefined") {
+    PrepAPI.scheduler.submitFeedback(bookingId, {
+      communication,
+      problemSolving,
+      codeQuality,
+      comment
+    }).catch(err => console.warn("Could not sync feedback to backend:", err));
+  }
+
   document.getElementById("feedback-dialog").close();
   showToast("Feedback saved successfully.");
   renderAll();
@@ -2751,10 +2833,21 @@ function initialize() {
       PrepStorage.setGfgUsername(gfgUsername);
     }
   
-  if(typeof syncQuestionsFromBackend==="function"){
-    syncQuestionsFromBackend().then(()=>renderAll());
+    if (typeof syncQuestionsFromBackend === "function") {
+      syncQuestionsFromBackend().then(() => renderAll());
+    }
   }
-}
+
+  // Sync peer mock scheduler slots & bookings
+  if (typeof syncSchedulerFromBackend === "function") {
+    syncSchedulerFromBackend().then(() => renderAll());
+  }
+
+  // Update backend status indicator badge
+  if (typeof updateBackendStatusIndicator === "function") {
+    updateBackendStatusIndicator();
+    setInterval(updateBackendStatusIndicator, 15000);
+  }
 
   showLandingScreen();
   renderAll();
