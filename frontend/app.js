@@ -591,9 +591,25 @@ function clearGooglePendingAuth() {
     }
   }
 }
+// Synchronizes questions from MongoDB backend into local storage
+async function syncQuestionsFromBackend() {
+  if (typeof PrepAPI === "undefined" || !PrepAPI.getToken()) return;
+  try {
+    let res = await PrepAPI.questions.getAll();
+    if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      let backendQs = res.data.map(q => ({
+        ...q,
+        id: q._id || q.id
+      }));
+      PrepStorage.setQuestions(backendQs);
+    }
+  } catch (err) {
+    console.warn("Could not sync questions from backend:", err);
+  }
+}
 
-// Validates credentials and logs in user
-function handleLogin(event) {
+// Validates credentials and logs in user (tries MongoDB backend first)
+async function handleLogin(event) {
   event.preventDefault();
 
   let form = event.target;
@@ -605,23 +621,50 @@ function handleLogin(event) {
     return;
   }
 
-  let users = PrepStorage.getUsers();
-  let foundUser = users.find(function (user) {
-    return user.email && user.email.trim().toLowerCase() === email && user.password === password;
-  });
+  let loggedInUser = null;
 
-  if (!foundUser) {
-    showToast("Invalid credentials or no account found. Please sign up.");
-    return;
+  // 1. Try Backend API
+  if (typeof PrepAPI !== "undefined") {
+    let apiRes = await PrepAPI.auth.login({ email, password });
+    if (apiRes.success && apiRes.data) {
+      loggedInUser = {
+        id: apiRes.data._id,
+        name: apiRes.data.name,
+        email: apiRes.data.email,
+        university: apiRes.data.university || "",
+        course: apiRes.data.course || "",
+        year: apiRes.data.year || "",
+        leetcode: apiRes.data.leetcode || "",
+        gfg: apiRes.data.gfg || "",
+        github: apiRes.data.github || ""
+      };
+      PrepStorage.setCurrentUser(loggedInUser);
+      PrepStorage.setWhoami(loggedInUser.name || loggedInUser.email);
+      await syncQuestionsFromBackend();
+    }
   }
 
-  PrepStorage.setCurrentUser(foundUser);
-  PrepStorage.setWhoami(foundUser.name || foundUser.email);
+  // 2. Offline Fallback to localStorage if backend is offline or returned an error
+  if (!loggedInUser) {
+    let users = PrepStorage.getUsers();
+    let foundLocal = users.find(function (user) {
+      return user.email && user.email.trim().toLowerCase() === email && user.password === password;
+    });
+
+    if (!foundLocal) {
+      showToast("Invalid credentials or no account found. Please sign up.");
+      return;
+    }
+
+    loggedInUser = foundLocal;
+    PrepStorage.setCurrentUser(foundLocal);
+    PrepStorage.setWhoami(foundLocal.name || foundLocal.email);
+  }
 
   form.reset();
 
   let identityInput = document.getElementById("identity-input");
-  identityInput.value = foundUser.name || foundUser.email;
+  identityInput.value = loggedInUser.name || loggedInUser.email;
   identityInput.readOnly = true;
 
   setIdentityFromAccount();
@@ -634,11 +677,11 @@ function handleLogin(event) {
   githubUsername = PrepStorage.getGithubUsername();
 
   renderAll();
-  showToast(`Welcome back, ${foundUser.name || "there"}!`);
+  showToast(`Welcome back, ${loggedInUser.name || "there"}!`);
 }
 
-// Registers a new user account and navigates to the dashboard
-function handleSignup(event) {
+// Registers a new user account on MongoDB backend & local storage
+async function handleSignup(event) {
   event.preventDefault();
 
   let form = event.target;
@@ -652,7 +695,6 @@ function handleSignup(event) {
   let gfg = form.elements["gfg"] ? form.elements["gfg"].value.trim() : "";
   let github = form.elements["github"] ? form.elements["github"].value.trim().replace(/^@/, "") : "";
 
-  // If registering via verified Google account, allow auto-generated password if user left it blank
   if (googlePendingAuth && (!password || password.length < 4)) {
     password = "GoogleAuth@" + googlePendingAuth.email.split("@")[0].slice(0, 4) + "!" + String(Date.now()).slice(-4);
   }
@@ -664,16 +706,6 @@ function handleSignup(event) {
 
   if (password.length < 4) {
     showToast("Password must be at least 4 characters long.");
-    return;
-  }
-
-  let users = PrepStorage.getUsers();
-  let emailExists = users.some(function (user) {
-    return user.email && user.email.trim().toLowerCase() === email;
-  });
-
-  if (emailExists) {
-    showToast("An account with this email already exists.");
     return;
   }
 
@@ -701,8 +733,24 @@ function handleSignup(event) {
     }
   }
 
-  users.push(newUser);
-  PrepStorage.setUsers(users);
+  // 1. Register on MongoDB Backend
+  if (typeof PrepAPI !== "undefined") {
+    let apiRes = await PrepAPI.auth.register(newUser);
+    if (apiRes.success && apiRes.data && apiRes.data._id) {
+      newUser.id = apiRes.data._id;
+    }
+  }
+
+  // 2. Persist locally as fallback
+  let users = PrepStorage.getUsers();
+  let emailExists = users.some(function (user) {
+    return user.email && user.email.trim().toLowerCase() === email;
+  });
+  if (!emailExists) {
+    users.push(newUser);
+    PrepStorage.setUsers(users);
+  }
+
   PrepStorage.setCurrentUser(newUser);
   PrepStorage.setWhoami(name);
 
@@ -747,8 +795,11 @@ function handleSignup(event) {
   showToast(`Account created for ${name}! Welcome to Prep Loop.`);
 }
 
-// Clears user session and resets application view to landing screen
+// Clears user session and logs out
 function handleLogout() {
+  if (typeof PrepAPI !== "undefined") {
+    PrepAPI.auth.logout();
+  }
   PrepStorage.setCurrentUser(null);
   PrepStorage.setWhoami("");
 
@@ -1760,11 +1811,14 @@ function onQuestionSubmit(event) {
     }
   }
 
+  let savedQuestion = null;
+
   if (existingIndex >= 0) {
     let existing = questions[existingIndex];
     if (tag) existing.tag = tag;
     if (difficulty) existing.difficulty = difficulty;
     questions[existingIndex] = SM2.recalculate(existing, isCorrect, timeTaken);
+    savedQuestion = questions[existingIndex];
     showToast(`Attempt added to “${topic}” [${tag}].`);
   } else {
     let newQ = SM2.newQuestion({
@@ -1776,10 +1830,27 @@ function onQuestionSubmit(event) {
       timeTaken: timeTaken
     });
     questions.push(newQ);
+    savedQuestion = newQ;
     showToast(`“${topic}” [${tag}] added to your review queue.`);
   }
 
   PrepStorage.setQuestions(questions);
+
+  // Sync with MongoDB backend if user has a token
+  if (typeof PrepAPI !== "undefined" && PrepAPI.getToken() && savedQuestion) {
+    PrepAPI.questions.add({
+      topic: savedQuestion.topic,
+      tag: savedQuestion.tag,
+      difficulty: savedQuestion.difficulty,
+      outcome: outcome,
+      timeTaken: savedQuestion.timeTaken,
+      repetition: savedQuestion.repetition,
+      interval: savedQuestion.interval,
+      easeFactor: savedQuestion.easeFactor,
+      nextReviewDate: savedQuestion.nextReviewDate
+    });
+  }
+
   form.reset();
   if (form.elements["tag"]) form.elements["tag"].value = "";
   form.elements["dsaTopic"].value = "";
@@ -2679,7 +2750,11 @@ function initialize() {
     if (gfgUsername && !PrepStorage.getGfgUsername()) {
       PrepStorage.setGfgUsername(gfgUsername);
     }
+  
+  if(typeof syncQuestionsFromBackend==="function"){
+    syncQuestionsFromBackend().then(()=>renderAll());
   }
+}
 
   showLandingScreen();
   renderAll();
