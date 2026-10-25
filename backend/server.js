@@ -4,6 +4,8 @@ const dotenv = require('dotenv');
 const path = require('path');
 const connectMongoDB = require('./config/db');
 
+// Load environment variables (supports running from root or backend directory)
+dotenv.config({ path: path.join(__dirname, '.env') });
 dotenv.config();
 
 // Connect to Database

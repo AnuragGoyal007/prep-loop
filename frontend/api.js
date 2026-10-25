@@ -55,10 +55,7 @@ const PrepAPI = (function () {
   // Check if backend server is live
   async function isBackendOnline() {
     try {
-      const url = typeof window !== 'undefined' && window.location.port === '5000'
-        ? '/api/scheduler/slots'
-        : 'http://localhost:5000/api/scheduler/slots';
-      const res = await fetch(url, { method: 'GET' });
+      const res = await fetch(`${BASE_URL}/scheduler/slots`, { method: 'GET' });
       return res.ok;
     } catch (e) {
       return false;
