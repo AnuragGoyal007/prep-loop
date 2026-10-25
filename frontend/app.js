@@ -485,7 +485,8 @@ function triggerGoogleAuth() {
 }
 
 // Processes a verified Google account: logs in if existing, or pre-fills and prompts new user
-function processGoogleUser(googleData) {
+// Processes a verified Google account: authenticates directly with MongoDB Atlas
+async function processGoogleUser(googleData) {
   let modal = document.getElementById("google-auth-dialog");
   if (modal && modal.open) {
     modal.close();
@@ -499,106 +500,89 @@ function processGoogleUser(googleData) {
     return;
   }
 
-  let users = PrepStorage.getUsers();
-  let existingUser = users.find(function (u) {
-    return u.email && u.email.trim().toLowerCase() === cleanEmail;
-  });
+  showToast("Authenticating with Google on MongoDB Atlas...");
 
-  if (existingUser) {
-    if (googleData.avatar && !existingUser.avatar && !existingUser.profilePhoto) {
-      existingUser.avatar = googleData.avatar;
-      existingUser.profilePhoto = googleData.avatar;
-    }
-    existingUser.isGoogle = true;
-    existingUser.googleId = googleData.googleId || existingUser.googleId || "google-" + Date.now();
+  try {
+    let apiRes = await PrepAPI.auth.googleAuth({
+      email: cleanEmail,
+      name: cleanName,
+      googleId: googleData.googleId || "",
+      avatar: googleData.avatar || ""
+    });
 
-    let userIdx = users.findIndex(function (u) { return u.email === existingUser.email; });
-    if (userIdx >= 0) {
-      users[userIdx] = existingUser;
-      PrepStorage.setUsers(users);
-    }
+    if (apiRes.success && apiRes.data) {
+      let user = {
+        id: apiRes.data._id,
+        name: apiRes.data.name || cleanName,
+        email: apiRes.data.email || cleanEmail,
+        university: apiRes.data.university || "",
+        course: apiRes.data.course || "",
+        year: apiRes.data.year || "",
+        leetcode: apiRes.data.leetcode || "",
+        gfg: apiRes.data.gfg || "",
+        github: apiRes.data.github || "",
+        isGoogle: true,
+        googleId: apiRes.data.googleId || googleData.googleId || "",
+        avatar: apiRes.data.avatar || googleData.avatar || ""
+      };
 
-    PrepStorage.setCurrentUser(existingUser);
-    PrepStorage.setWhoami(existingUser.name || existingUser.email);
-
-    // Sync to backend MongoDB Atlas
-    if (typeof PrepAPI !== "undefined") {
-      PrepAPI.auth.googleAuth({
-        email: cleanEmail,
-        name: cleanName || existingUser.name,
-        googleId: existingUser.googleId,
-        avatar: existingUser.avatar || "",
-        university: existingUser.university || "",
-        course: existingUser.course || "",
-        year: existingUser.year || "",
-        leetcode: existingUser.leetcode || "",
-        gfg: existingUser.gfg || "",
-        github: existingUser.github || ""
-      }).then(function (res) {
-        if (res.success && res.data && res.data._id) {
-          existingUser.id = res.data._id;
-          PrepStorage.setCurrentUser(existingUser);
+      // If user lacks academic profile info, guide them to complete signup
+      if (!user.university || !user.course || !user.year) {
+        googlePendingAuth = {
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          googleId: user.googleId
+        };
+        switchAuthMode("signup");
+        let signupForm = document.getElementById("signup-form");
+        if (signupForm) {
+          signupForm.elements["name"].value = user.name;
+          signupForm.elements["email"].value = user.email;
+          signupForm.elements["name"].readOnly = true;
+          signupForm.elements["email"].readOnly = true;
+          if (!signupForm.elements["password"].value) {
+            signupForm.elements["password"].value = "GoogleAuth@" + cleanEmail.split("@")[0].slice(0, 4);
+          }
+          let verifiedBanner = document.getElementById("google-verified-banner");
+          let verifiedEmailElem = document.getElementById("google-verified-email");
+          if (verifiedBanner && verifiedEmailElem) {
+            verifiedEmailElem.textContent = `${cleanEmail} (Verified via Google)`;
+            verifiedBanner.hidden = false;
+          }
         }
-      }).catch(function (err) {
-        console.warn("Backend Google sync error:", err);
-      });
-    }
-
-    let identityInput = document.getElementById("identity-input");
-    if (identityInput) {
-      identityInput.value = existingUser.name || existingUser.email;
-      identityInput.readOnly = true;
-    }
-
-    setIdentityFromAccount();
-    showAppScreen();
-
-    leetCodeUsername = PrepStorage.getLeetCodeUsername() || existingUser.leetcode || "";
-    gfgUsername = PrepStorage.getGfgUsername() || existingUser.gfg || "";
-    githubUsername = PrepStorage.getGithubUsername() || existingUser.github || "";
-
-    renderAll();
-    showToast(`Welcome back, ${existingUser.name || "there"}! (Verified via Google)`);
-    return;
-  }
-
-  // User is new: pre-fill and require academic registration fields
-  googlePendingAuth = {
-    name: cleanName,
-    email: cleanEmail,
-    avatar: googleData.avatar || "",
-    googleId: googleData.googleId || "google-" + Date.now()
-  };
-
-  switchAuthMode("signup");
-
-  let signupForm = document.getElementById("signup-form");
-  if (signupForm) {
-    signupForm.elements["name"].value = cleanName;
-    signupForm.elements["email"].value = cleanEmail;
-    signupForm.elements["name"].readOnly = true;
-    signupForm.elements["email"].readOnly = true;
-
-    if (!signupForm.elements["password"].value) {
-      signupForm.elements["password"].value = "GoogleAuth@" + cleanEmail.split("@")[0].slice(0, 4);
-    }
-
-    let verifiedBanner = document.getElementById("google-verified-banner");
-    let verifiedEmailElem = document.getElementById("google-verified-email");
-    if (verifiedBanner && verifiedEmailElem) {
-      verifiedEmailElem.textContent = `${cleanEmail} (Verified)`;
-      verifiedBanner.hidden = false;
-    }
-
-    setTimeout(function () {
-      let uniInput = signupForm.elements["university"];
-      if (uniInput) {
-        uniInput.focus();
+        showToast("Google verified! Please fill in your university and branch details.");
+        return;
       }
-    }, 150);
-  }
 
-  showToast(`Google account verified! Please enter your university and academic details to complete registration.`);
+      PrepStorage.setCurrentUser(user);
+      await Promise.all([
+        syncQuestionsFromBackend(),
+        syncSchedulerFromBackend()
+      ]);
+
+      let identityInput = document.getElementById("identity-input");
+      if (identityInput) {
+        identityInput.value = user.name || user.email;
+        identityInput.readOnly = true;
+      }
+
+      setIdentityFromAccount();
+      showAppScreen();
+
+      leetCodeUsername = user.leetcode || "";
+      gfgUsername = user.gfg || "";
+      githubUsername = user.github || "";
+
+      renderAll();
+      showToast(`Welcome back, ${user.name || "there"}! (Verified via Google)`);
+      return;
+    } else {
+      showToast(apiRes.error || "Google authentication failed. Please try again.");
+    }
+  } catch (err) {
+    showToast("Google sign-in error: " + err.message);
+  }
 }
 
 // Clears Google pre-fill state and allows manual registration
@@ -657,11 +641,7 @@ async function syncSchedulerFromBackend() {
       PrepStorage.setBookings(backendBookings);
     }
   } catch (err) {
-    console.warn("Scheduler backend sync error:", err);
-  }
-}
-
-// Live Backend Health Indicator update
+    console.warn("Scheduler backend sync error:", e// Live Backend Health Indicator update
 async function updateBackendStatusIndicator() {
   if (typeof PrepAPI === "undefined") return;
   try {
@@ -671,12 +651,12 @@ async function updateBackendStatusIndicator() {
       if (!pill) return;
       if (isOnline) {
         pill.className = "backend-status-badge online";
-        pill.innerHTML = `<span class="status-dot"></span><span class="status-text">MongoDB Live</span>`;
-        pill.title = "Connected to Express.js REST API & MongoDB Database";
+        pill.innerHTML = `<span class="status-dot"></span><span class="status-text">MongoDB Atlas Live</span>`;
+        pill.title = "Connected to Express.js REST API & MongoDB Atlas Database";
       } else {
         pill.className = "backend-status-badge offline";
-        pill.innerHTML = `<span class="status-dot"></span><span class="status-text">Local Storage Mode</span>`;
-        pill.title = "Backend offline — running local-first mode";
+        pill.innerHTML = `<span class="status-dot"></span><span class="status-text">Atlas Offline</span>`;
+        pill.title = "Unable to connect to MongoDB Atlas cluster";
       }
     });
   } catch (e) {
@@ -684,7 +664,7 @@ async function updateBackendStatusIndicator() {
   }
 }
 
-// Validates credentials and logs in user (tries MongoDB backend first)
+// Validates credentials and logs in user directly via MongoDB Atlas
 async function handleLogin(event) {
   event.preventDefault();
 
@@ -697,66 +677,54 @@ async function handleLogin(event) {
     return;
   }
 
-  let loggedInUser = null;
+  showToast("Signing in to MongoDB Atlas...");
 
-  // 1. Try Backend API
-  if (typeof PrepAPI !== "undefined") {
-    let apiRes = await PrepAPI.auth.login({ email, password });
-    if (apiRes.success && apiRes.data) {
-      loggedInUser = {
-        id: apiRes.data._id,
-        name: apiRes.data.name,
-        email: apiRes.data.email,
-        university: apiRes.data.university || "",
-        course: apiRes.data.course || "",
-        year: apiRes.data.year || "",
-        leetcode: apiRes.data.leetcode || "",
-        gfg: apiRes.data.gfg || "",
-        github: apiRes.data.github || ""
-      };
-      PrepStorage.setCurrentUser(loggedInUser);
-      PrepStorage.setWhoami(loggedInUser.name || loggedInUser.email);
-      await syncQuestionsFromBackend();
-    }
+  let apiRes = await PrepAPI.auth.login({ email, password });
+  if (!apiRes.success || !apiRes.data) {
+    showToast(apiRes.error || "Invalid email or password. Please try again.");
+    return;
   }
 
-  // 2. Offline Fallback to localStorage if backend is offline or returned an error
-  if (!loggedInUser) {
-    let users = PrepStorage.getUsers();
-    let foundLocal = users.find(function (user) {
-      return user.email && user.email.trim().toLowerCase() === email && user.password === password;
-    });
+  let loggedInUser = {
+    id: apiRes.data._id,
+    name: apiRes.data.name,
+    email: apiRes.data.email,
+    university: apiRes.data.university || "",
+    course: apiRes.data.course || "",
+    year: apiRes.data.year || "",
+    leetcode: apiRes.data.leetcode || "",
+    gfg: apiRes.data.gfg || "",
+    github: apiRes.data.github || "",
+    isGoogle: apiRes.data.isGoogle || false,
+    avatar: apiRes.data.avatar || ""
+  };
 
-    if (!foundLocal) {
-      showToast("Invalid credentials or no account found. Please sign up.");
-      return;
-    }
-
-    loggedInUser = foundLocal;
-    PrepStorage.setCurrentUser(foundLocal);
-    PrepStorage.setWhoami(foundLocal.name || foundLocal.email);
-  }
+  PrepStorage.setCurrentUser(loggedInUser);
+  await Promise.all([
+    syncQuestionsFromBackend(),
+    syncSchedulerFromBackend()
+  ]);
 
   form.reset();
 
   let identityInput = document.getElementById("identity-input");
-  identityInput.value = loggedInUser.name || loggedInUser.email;
-  identityInput.readOnly = true;
+  if (identityInput) {
+    identityInput.value = loggedInUser.name || loggedInUser.email;
+    identityInput.readOnly = true;
+  }
 
   setIdentityFromAccount();
   showAppScreen();
 
-  leetCodeUsername = PrepStorage.getLeetCodeUsername();
-  leetCardVersion = "";
-  gfgUsername = PrepStorage.getGfgUsername() || leetCodeUsername;
-  gfgCardVersion = "";
-  githubUsername = PrepStorage.getGithubUsername();
+  leetCodeUsername = loggedInUser.leetcode || "";
+  gfgUsername = loggedInUser.gfg || "";
+  githubUsername = loggedInUser.github || "";
 
   renderAll();
   showToast(`Welcome back, ${loggedInUser.name || "there"}!`);
 }
 
-// Registers a new user account on MongoDB backend & local storage
+// Registers a new user account directly on MongoDB Atlas
 async function handleSignup(event) {
   event.preventDefault();
 
@@ -786,18 +754,15 @@ async function handleSignup(event) {
   }
 
   let newUser = {
-    id: PrepStorage.uid(),
     name: name,
     email: email,
     password: password,
     university: university,
     course: course,
-    courseRole: course,
     year: year,
     leetcode: leetcode,
     gfg: gfg,
-    github: github,
-    githubUsername: github
+    github: github
   };
 
   if (googlePendingAuth) {
@@ -805,55 +770,26 @@ async function handleSignup(event) {
     newUser.googleId = googlePendingAuth.googleId;
     if (googlePendingAuth.avatar) {
       newUser.avatar = googlePendingAuth.avatar;
-      newUser.profilePhoto = googlePendingAuth.avatar;
     }
   }
 
-  // 1. Register on MongoDB Backend
-  if (typeof PrepAPI !== "undefined") {
-    let apiRes = await PrepAPI.auth.register(newUser);
-    if (apiRes.success && apiRes.data && apiRes.data._id) {
-      newUser.id = apiRes.data._id;
-    }
+  showToast("Creating account in MongoDB Atlas...");
+
+  let apiRes = await PrepAPI.auth.register(newUser);
+  if (!apiRes.success || !apiRes.data) {
+    showToast(apiRes.error || "Registration failed. That email may already be registered.");
+    return;
   }
 
-  // 2. Persist locally as fallback
-  let users = PrepStorage.getUsers();
-  let emailExists = users.some(function (user) {
-    return user.email && user.email.trim().toLowerCase() === email;
-  });
-  if (!emailExists) {
-    users.push(newUser);
-    PrepStorage.setUsers(users);
-  }
+  newUser.id = apiRes.data._id;
+  newUser.isGoogle = apiRes.data.isGoogle || false;
+  newUser.avatar = apiRes.data.avatar || "";
 
   PrepStorage.setCurrentUser(newUser);
-  PrepStorage.setWhoami(name);
 
-  if (leetcode) {
-    PrepStorage.setLeetCodeUsername(leetcode);
-    leetCodeUsername = leetcode;
-    leetCardVersion = String(Date.now());
-  } else {
-    leetCodeUsername = "";
-    leetCardVersion = "";
-  }
-
-  if (gfg) {
-    PrepStorage.setGfgUsername(gfg);
-    gfgUsername = gfg;
-    gfgCardVersion = String(Date.now());
-  } else {
-    gfgUsername = "";
-    gfgCardVersion = "";
-  }
-
-  if (github) {
-    PrepStorage.setGithubUsername(github);
-    githubUsername = github;
-  } else {
-    githubUsername = "";
-  }
+  leetCodeUsername = leetcode;
+  gfgUsername = gfg;
+  githubUsername = github;
 
   clearGooglePendingAuth();
   form.reset();
@@ -866,7 +802,6 @@ async function handleSignup(event) {
 
   setIdentityFromAccount();
   showAppScreen();
-
   renderAll();
   showToast(`Account created for ${name}! Welcome to Prep Loop.`);
 }
@@ -2848,32 +2783,65 @@ function initialize() {
 
   initGoogleAuth();
 
-  if (currentUserAccount) {
-    leetCodeUsername = PrepStorage.getLeetCodeUsername();
-    gfgUsername = PrepStorage.getGfgUsername() || leetCodeUsername;
-    githubUsername = PrepStorage.getGithubUsername();
-    if (gfgUsername && !PrepStorage.getGfgUsername()) {
-      PrepStorage.setGfgUsername(gfgUsername);
-    }
-  
-    if (typeof syncQuestionsFromBackend === "function") {
-      syncQuestionsFromBackend().then(() => renderAll());
-    }
-  }
-
-  // Sync peer mock scheduler slots & bookings
-  if (typeof syncSchedulerFromBackend === "function") {
-    syncSchedulerFromBackend().then(() => renderAll());
-  }
-
   // Update backend status indicator badge
   if (typeof updateBackendStatusIndicator === "function") {
     updateBackendStatusIndicator();
     setInterval(updateBackendStatusIndicator, 15000);
   }
 
-  showLandingScreen();
-  renderAll();
+  // Pure Atlas Authentication: validate existing JWT Bearer token
+  if (typeof PrepAPI !== "undefined" && PrepAPI.getToken()) {
+    PrepAPI.auth.getMe().then(async function (res) {
+      if (res.success && res.data) {
+        let user = {
+          id: res.data._id,
+          name: res.data.name,
+          email: res.data.email,
+          university: res.data.university || "",
+          course: res.data.course || "",
+          year: res.data.year || "",
+          leetcode: res.data.leetcode || "",
+          gfg: res.data.gfg || "",
+          github: res.data.github || "",
+          isGoogle: res.data.isGoogle || false,
+          avatar: res.data.avatar || ""
+        };
+        PrepStorage.setCurrentUser(user);
+
+        let identityInput = document.getElementById("identity-input");
+        if (identityInput) {
+          identityInput.value = user.name || user.email;
+          identityInput.readOnly = true;
+        }
+
+        setIdentityFromAccount();
+        showAppScreen();
+
+        leetCodeUsername = user.leetcode || "";
+        gfgUsername = user.gfg || "";
+        githubUsername = user.github || "";
+
+        await Promise.all([
+          syncQuestionsFromBackend(),
+          syncSchedulerFromBackend()
+        ]);
+        renderAll();
+      } else {
+        // Token invalid or user was removed
+        PrepAPI.auth.logout();
+        PrepStorage.setCurrentUser(null);
+        showLandingScreen();
+        renderAll();
+      }
+    }).catch(function () {
+      showLandingScreen();
+      renderAll();
+    });
+  } else {
+    PrepStorage.setCurrentUser(null);
+    showLandingScreen();
+    renderAll();
+  }
 }
 
 initialize();

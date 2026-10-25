@@ -1,316 +1,209 @@
+// frontend/storage.js - Pure In-Memory Runtime Store (Only JWT Token & Theme in localStorage)
 const PrepStorage = (function () {
-  const KEYS = {
-    questions: "prepLoop.questions",
-    slots: "prepLoop.slots",
-    bookings: "prepLoop.bookings",
-    whoami: "prepLoop.whoami",
-    users: "prepLoop.users",
-    currentUser: "prepLoop.currentUser",
-    theme: "prepLoop.theme",
-    leetCodeProfiles: "prepLoop.leetCodeProfiles",
-    gfgProfiles: "prepLoop.gfgProfiles",
-    gfgCache: "prepLoop.gfgCache",
-    githubProfiles: "prepLoop.githubProfiles",
-    googleClientId: "prepLoop.googleClientId",
-    csCoreProgress: "prepLoop.csCoreProgress"
-  };
+  const THEME_KEY = "prepLoop.theme";
 
-  // Safely parses and returns JSON from localStorage with a fallback
-  function readJSON(key, fallback) {
-    if (fallback === undefined) {
-      fallback = [];
-    }
+  // Automatically purge legacy Phase 1 mock database keys from localStorage
+  const LEGACY_KEYS = [
+    "prepLoop.questions",
+    "prepLoop.slots",
+    "prepLoop.bookings",
+    "prepLoop.whoami",
+    "prepLoop.users",
+    "prepLoop.currentUser",
+    "prepLoop.leetCodeProfiles",
+    "prepLoop.gfgProfiles",
+    "prepLoop.gfgCache",
+    "prepLoop.githubProfiles",
+    "prepLoop.googleClientId",
+    "prepLoop.csCoreProgress"
+  ];
+  try {
+    LEGACY_KEYS.forEach(k => localStorage.removeItem(k));
+  } catch (e) {}
+
+  // In-memory runtime state for active session (sourced 100% from MongoDB Atlas)
+  let _currentUser = null;
+  let _questions = [];
+  let _slots = [];
+  let _bookings = [];
+  let _whoami = "";
+  let _leetCodeUsername = "";
+  let _gfgUsername = "";
+  let _githubUsername = "";
+  let _gfgCache = {};
+  let _csCoreProgress = {};
+
+  // Theme Persistence (Allowed in localStorage)
+  function getTheme() {
     try {
-      let value = JSON.parse(localStorage.getItem(key));
-      return value === null ? fallback : value;
-    } catch (err) {
-      return fallback;
+      return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light";
+    } catch (e) {
+      return "light";
     }
   }
 
-  // Serializes and writes a value to localStorage
-  function writeJSON(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
+  function setTheme(value) {
+    try {
+      localStorage.setItem(THEME_KEY, value === "dark" ? "dark" : "light");
+    } catch (e) {}
   }
 
-  // Reads an array from localStorage
-  function readArray(key) {
-    let value = readJSON(key, []);
-    return Array.isArray(value) ? value : [];
+  // Active User session (In-memory, validated via JWT on backend)
+  function getCurrentUser() {
+    return _currentUser;
   }
 
-  // Writes an array to localStorage
-  function writeArray(key, value) {
-    writeJSON(key, value);
-  }
-
-  // Resolves the unique storage namespace key for the active user
-  function getUserStorageKey() {
-    let account = getCurrentUser();
-    if (account && (account.id || account.email)) {
-      return String(account.id || account.email);
+  function setCurrentUser(user) {
+    _currentUser = user;
+    if (user) {
+      _whoami = user.name || user.email || "";
+      _leetCodeUsername = user.leetcode || "";
+      _gfgUsername = user.gfg || "";
+      _githubUsername = (user.github || "").replace(/^@/, "");
+    } else {
+      _whoami = "";
+      _leetCodeUsername = "";
+      _gfgUsername = "";
+      _githubUsername = "";
+      _questions = [];
     }
-    let who = getWhoami();
-    return who ? `whoami_${who}` : "guest_user";
   }
 
-  // Retrieves all logged questions for the active user
-  function getQuestions() {
-    let userKey = getUserStorageKey();
-    let allQuestions = readJSON(KEYS.questions, {});
-    if (allQuestions && typeof allQuestions === "object" && !Array.isArray(allQuestions)) {
-      let userList = allQuestions[userKey];
-      return Array.isArray(userList) ? userList : [];
-    }
+  function getWhoami() {
+    return _whoami;
+  }
+
+  function setWhoami(val) {
+    _whoami = String(val || "");
+  }
+
+  // Legacy mock users array - always empty since all users live exclusively in MongoDB Atlas
+  function getUsers() {
     return [];
   }
 
-  // Saves questions array for the active user
-  function setQuestions(value) {
-    let userKey = getUserStorageKey();
-    let allQuestions = readJSON(KEYS.questions, {});
-    let nextQuestions = allQuestions && typeof allQuestions === "object" && !Array.isArray(allQuestions)
-      ? allQuestions
-      : {};
-    nextQuestions[userKey] = Array.isArray(value) ? value : [];
-    writeJSON(KEYS.questions, nextQuestions);
+  function setUsers() {
+    // No-op: all users live exclusively in Atlas
   }
 
-  // Returns all shared mock interview slots
+  // Questions (In-memory cache from Atlas API)
+  function getQuestions() {
+    return Array.isArray(_questions) ? _questions : [];
+  }
+
+  function setQuestions(list) {
+    _questions = Array.isArray(list) ? list : [];
+  }
+
+  // Scheduler Slots (In-memory cache from Atlas API)
   function getSlots() {
-    return readArray(KEYS.slots);
+    return Array.isArray(_slots) ? _slots : [];
   }
 
-  // Saves the shared mock interview slots array
-  function setSlots(value) {
-    writeArray(KEYS.slots, value);
+  function setSlots(list) {
+    _slots = Array.isArray(list) ? list : [];
   }
 
-  // Returns all mock interview bookings
+  // Bookings (In-memory cache from Atlas API)
   function getBookings() {
-    return readArray(KEYS.bookings);
+    return Array.isArray(_bookings) ? _bookings : [];
   }
 
-  // Saves mock interview bookings array
-  function setBookings(value) {
-    writeArray(KEYS.bookings, value);
+  function setBookings(list) {
+    _bookings = Array.isArray(list) ? list : [];
   }
 
-  // Returns display name for unauthenticated guest sessions
-  function getWhoami() {
-    return localStorage.getItem(KEYS.whoami) || "";
-  }
-
-  // Updates display name for guest sessions
-  function setWhoami(value) {
-    localStorage.setItem(KEYS.whoami, value);
-  }
-
-  // Returns list of registered user accounts
-  function getUsers() {
-    let value = readJSON(KEYS.users, []);
-    return Array.isArray(value) ? value : [];
-  }
-
-  // Saves registered user accounts array
-  function setUsers(value) {
-    writeJSON(KEYS.users, value);
-  }
-
-  // Retrieves the currently authenticated user object
-  function getCurrentUser() {
-    try {
-      let value = JSON.parse(localStorage.getItem(KEYS.currentUser));
-      return value && typeof value === "object" ? value : null;
-    } catch (err) {
-      return null;
-    }
-  }
-
-  // Updates or clears the currently authenticated user session
-  function setCurrentUser(value) {
-    if (!value) {
-      localStorage.removeItem(KEYS.currentUser);
-      return;
-    }
-    localStorage.setItem(KEYS.currentUser, JSON.stringify(value));
-  }
-
-  // Reads the saved theme preference ('light' or 'dark')
-  function getTheme() {
-    let value = localStorage.getItem(KEYS.theme);
-    return value === "dark" ? "dark" : "light";
-  }
-
-  // Saves the theme preference to localStorage
-  function setTheme(value) {
-    localStorage.setItem(KEYS.theme, value === "dark" ? "dark" : "light");
-  }
-
-  // Gets the saved LeetCode username for the active user
+  // Coding Handles (In-memory, sourced from user profile)
   function getLeetCodeUsername() {
-    let account = getCurrentUser();
-    if (!account || !account.id) return "";
-    let profiles = readJSON(KEYS.leetCodeProfiles, {});
-    let saved = profiles && typeof profiles === "object" ? profiles[account.id] : "";
-    return typeof saved === "object" ? String(saved.username || "") : String(saved || "");
+    return _leetCodeUsername || (_currentUser ? _currentUser.leetcode : "") || "";
   }
 
-  // Saves the LeetCode username for the active user
-  function setLeetCodeUsername(value) {
-    let account = getCurrentUser();
-    if (!account || !account.id) return;
-    let profiles = readJSON(KEYS.leetCodeProfiles, {});
-    let nextProfiles = profiles && typeof profiles === "object" ? profiles : {};
-    nextProfiles[account.id] = String(value || "").trim();
-    writeJSON(KEYS.leetCodeProfiles, nextProfiles);
+  function setLeetCodeUsername(val) {
+    _leetCodeUsername = String(val || "").trim();
+    if (_currentUser) _currentUser.leetcode = _leetCodeUsername;
   }
 
-  // Gets the saved GeeksforGeeks handle for the active user
   function getGfgUsername() {
-    let account = getCurrentUser();
-    if (!account || !account.id) return "";
-    let profiles = readJSON(KEYS.gfgProfiles, {});
-    let saved = profiles && typeof profiles === "object" ? profiles[account.id] : "";
-    return typeof saved === "object" ? String(saved.username || "") : String(saved || "");
+    return _gfgUsername || (_currentUser ? _currentUser.gfg : "") || "";
   }
 
-  // Saves the GeeksforGeeks handle for the active user
-  function setGfgUsername(value) {
-    let account = getCurrentUser();
-    if (!account || !account.id) return;
-    let profiles = readJSON(KEYS.gfgProfiles, {});
-    let nextProfiles = profiles && typeof profiles === "object" ? profiles : {};
-    nextProfiles[account.id] = String(value || "").trim();
-    writeJSON(KEYS.gfgProfiles, nextProfiles);
+  function setGfgUsername(val) {
+    _gfgUsername = String(val || "").trim();
+    if (_currentUser) _currentUser.gfg = _gfgUsername;
   }
 
-  // Retrieves cached GFG stats and heatmap payload for a username
+  function getGithubUsername() {
+    return _githubUsername || (_currentUser ? (_currentUser.github || _currentUser.githubUsername) : "") || "";
+  }
+
+  function setGithubUsername(val) {
+    _githubUsername = String(val || "").replace(/^@/, "").trim();
+    if (_currentUser) _currentUser.github = _githubUsername;
+  }
+
   function getGfgCache(username) {
     if (!username) return null;
-    let cache = readJSON(KEYS.gfgCache, {});
-    let key = String(username).trim().toLowerCase();
-    return cache && typeof cache === "object" ? cache[key] || null : null;
+    return _gfgCache[String(username).toLowerCase()] || null;
   }
 
-  // Caches GFG stats and heatmap payload for a username
   function setGfgCache(username, data) {
     if (!username || !data) return;
-    let cache = readJSON(KEYS.gfgCache, {});
-    let nextCache = cache && typeof cache === "object" ? cache : {};
-    let key = String(username).trim().toLowerCase();
-    nextCache[key] = data;
-    writeJSON(KEYS.gfgCache, nextCache);
+    _gfgCache[String(username).toLowerCase()] = data;
   }
 
-  // Gets the saved GitHub handle for the active user
-  function getGithubUsername() {
-    let account = getCurrentUser();
-    if (!account || !account.id) return "";
-    let profiles = readJSON(KEYS.githubProfiles, {});
-    let saved = profiles && typeof profiles === "object" ? profiles[account.id] : "";
-    let val = typeof saved === "object" ? String(saved.username || "") : String(saved || account.github || account.githubUsername || "");
-    return val.replace(/^@/, "").trim();
-  }
-
-  // Saves the GitHub handle for the active user
-  function setGithubUsername(value) {
-    let account = getCurrentUser();
-    if (!account || !account.id) return;
-    let profiles = readJSON(KEYS.githubProfiles, {});
-    let nextProfiles = profiles && typeof profiles === "object" ? profiles : {};
-    nextProfiles[account.id] = String(value || "").replace(/^@/, "").trim();
-    writeJSON(KEYS.githubProfiles, nextProfiles);
-  }
-
-  // Gets optional custom Google OAuth Client ID
   function getGoogleClientId() {
-    return localStorage.getItem(KEYS.googleClientId) || "";
+    return "";
   }
 
-  // Sets custom Google OAuth Client ID
-  function setGoogleClientId(value) {
-    if (value && String(value).trim()) {
-      localStorage.setItem(KEYS.googleClientId, String(value).trim());
-    } else {
-      localStorage.removeItem(KEYS.googleClientId);
-    }
-  }
+  function setGoogleClientId() {}
 
-  // Helper resolving storage key for CS Core sheets progress
-  function getCsUserKey() {
-    return getUserStorageKey();
-  }
-
-  // Retrieves CS Core sheets completion and bookmarks map for the active user
+  // CS Core Progress (In-memory runtime tracking)
   function getCsCoreProgress() {
-    let userKey = getCsUserKey();
-    let allProgress = readJSON(KEYS.csCoreProgress, {});
-    return allProgress && typeof allProgress === "object" && allProgress[userKey]
-      ? allProgress[userKey]
-      : {};
+    return _csCoreProgress;
   }
 
-  // Saves CS Core sheets progress map for the active user
-  function setCsCoreProgress(progressMap) {
-    let userKey = getCsUserKey();
-    let allProgress = readJSON(KEYS.csCoreProgress, {});
-    let nextProgress = allProgress && typeof allProgress === "object" ? allProgress : {};
-    nextProgress[userKey] = progressMap || {};
-    writeJSON(KEYS.csCoreProgress, nextProgress);
+  function setCsCoreProgress(map) {
+    _csCoreProgress = map || {};
   }
 
-  // Toggles the completed status of a CS Core sheet topic
   function toggleCsTopicComplete(topicId) {
-    let progress = getCsCoreProgress();
-    let current = progress[topicId] || {};
+    let current = _csCoreProgress[topicId] || {};
     let isCompleted = !current.completed;
-    progress[topicId] = {
+    _csCoreProgress[topicId] = {
       ...current,
       completed: isCompleted,
       completedAt: isCompleted ? Date.now() : null
     };
-    setCsCoreProgress(progress);
     return isCompleted;
   }
 
-  // Toggles bookmark status on a CS Core sheet topic
   function toggleCsTopicBookmark(topicId) {
-    let progress = getCsCoreProgress();
-    let current = progress[topicId] || {};
+    let current = _csCoreProgress[topicId] || {};
     let isBookmarked = !current.bookmarked;
-    progress[topicId] = {
+    _csCoreProgress[topicId] = {
       ...current,
       bookmarked: isBookmarked
     };
-    setCsCoreProgress(progress);
     return isBookmarked;
   }
 
-  // Saves user revision notes for a specific CS Core sheet topic
   function saveCsTopicNotes(topicId, notes) {
-    let progress = getCsCoreProgress();
-    let current = progress[topicId] || {};
-    progress[topicId] = {
+    let current = _csCoreProgress[topicId] || {};
+    _csCoreProgress[topicId] = {
       ...current,
       notes: String(notes || "")
     };
-    setCsCoreProgress(progress);
   }
 
-  // Links a CS Core sheet topic to an SM-2 spaced repetition question record
   function linkCsTopicToSm2(topicId, sm2QuestionId) {
-    let progress = getCsCoreProgress();
-    let current = progress[topicId] || {};
-    progress[topicId] = {
+    let current = _csCoreProgress[topicId] || {};
+    _csCoreProgress[topicId] = {
       ...current,
       sm2Id: sm2QuestionId,
       lastReviewed: new Date().toISOString().split("T")[0]
     };
-    setCsCoreProgress(progress);
   }
 
-  // Generates a unique identifier string
   function uid() {
     if (typeof crypto !== "undefined" && crypto.randomUUID) {
       return crypto.randomUUID();
@@ -319,37 +212,37 @@ const PrepStorage = (function () {
   }
 
   return {
-    getQuestions: getQuestions,
-    setQuestions: setQuestions,
-    getSlots: getSlots,
-    setSlots: setSlots,
-    getBookings: getBookings,
-    setBookings: setBookings,
-    getWhoami: getWhoami,
-    setWhoami: setWhoami,
-    getUsers: getUsers,
-    setUsers: setUsers,
-    getCurrentUser: getCurrentUser,
-    setCurrentUser: setCurrentUser,
-    getTheme: getTheme,
-    setTheme: setTheme,
-    getLeetCodeUsername: getLeetCodeUsername,
-    setLeetCodeUsername: setLeetCodeUsername,
-    getGfgUsername: getGfgUsername,
-    setGfgUsername: setGfgUsername,
-    getGfgCache: getGfgCache,
-    setGfgCache: setGfgCache,
-    getGithubUsername: getGithubUsername,
-    setGithubUsername: setGithubUsername,
-    getGoogleClientId: getGoogleClientId,
-    setGoogleClientId: setGoogleClientId,
-    getCsCoreProgress: getCsCoreProgress,
-    setCsCoreProgress: setCsCoreProgress,
-    toggleCsTopicComplete: toggleCsTopicComplete,
-    toggleCsTopicBookmark: toggleCsTopicBookmark,
-    saveCsTopicNotes: saveCsTopicNotes,
-    linkCsTopicToSm2: linkCsTopicToSm2,
-    uid: uid
+    getQuestions,
+    setQuestions,
+    getSlots,
+    setSlots,
+    getBookings,
+    setBookings,
+    getWhoami,
+    setWhoami,
+    getUsers,
+    setUsers,
+    getCurrentUser,
+    setCurrentUser,
+    getTheme,
+    setTheme,
+    getLeetCodeUsername,
+    setLeetCodeUsername,
+    getGfgUsername,
+    setGfgUsername,
+    getGfgCache,
+    setGfgCache,
+    getGithubUsername,
+    setGithubUsername,
+    getGoogleClientId,
+    setGoogleClientId,
+    getCsCoreProgress,
+    setCsCoreProgress,
+    toggleCsTopicComplete,
+    toggleCsTopicBookmark,
+    saveCsTopicNotes,
+    linkCsTopicToSm2,
+    uid
   };
 })();
 
