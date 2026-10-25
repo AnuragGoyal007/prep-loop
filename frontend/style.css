@@ -528,6 +528,57 @@ body.theme-dark .google-config-row input { background:#16211D; color:var(--ink);
 body.theme-dark .google-verified-banner { background:#192e24; border-color:var(--teal); }
 body.theme-dark .profile-verified-google-badge { background:#192e24; color:#7ce0b8; border-color:var(--teal); }
 
+/* Live Backend Status Indicator */
+.backend-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-family: var(--font-mono, monospace);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-weight: 600;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.12);
+  color: #16a34a;
+  transition: all 0.2s ease;
+  user-select: none;
+}
 
+body.theme-dark .backend-status-badge {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.35);
+}
 
+.backend-status-badge .status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
+  animation: pulse-dot 2s infinite ease-in-out;
+}
 
+.backend-status-badge.offline {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+body.theme-dark .backend-status-badge.offline {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.backend-status-badge.offline .status-dot {
+  background-color: #f59e0b;
+  box-shadow: none;
+  animation: none;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
