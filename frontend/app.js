@@ -521,6 +521,29 @@ function processGoogleUser(googleData) {
     PrepStorage.setCurrentUser(existingUser);
     PrepStorage.setWhoami(existingUser.name || existingUser.email);
 
+    // Sync to backend MongoDB Atlas
+    if (typeof PrepAPI !== "undefined") {
+      PrepAPI.auth.googleAuth({
+        email: cleanEmail,
+        name: cleanName || existingUser.name,
+        googleId: existingUser.googleId,
+        avatar: existingUser.avatar || "",
+        university: existingUser.university || "",
+        course: existingUser.course || "",
+        year: existingUser.year || "",
+        leetcode: existingUser.leetcode || "",
+        gfg: existingUser.gfg || "",
+        github: existingUser.github || ""
+      }).then(function (res) {
+        if (res.success && res.data && res.data._id) {
+          existingUser.id = res.data._id;
+          PrepStorage.setCurrentUser(existingUser);
+        }
+      }).catch(function (err) {
+        console.warn("Backend Google sync error:", err);
+      });
+    }
+
     let identityInput = document.getElementById("identity-input");
     if (identityInput) {
       identityInput.value = existingUser.name || existingUser.email;

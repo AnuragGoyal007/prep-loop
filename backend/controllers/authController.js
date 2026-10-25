@@ -10,7 +10,7 @@ const generateToken = (id) => {
 // @route   POST /api/auth/register
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, university, course, year, leetcode, gfg, github } = req.body;
+    const { name, email, password, university, course, year, leetcode, gfg, github, isGoogle, googleId, avatar } = req.body;
 
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -26,7 +26,10 @@ const registerUser = async (req, res) => {
       year,
       leetcode,
       gfg,
-      github
+      github,
+      isGoogle: Boolean(isGoogle),
+      googleId: googleId || '',
+      avatar: avatar || ''
     });
 
     if (user) {
@@ -34,6 +37,9 @@ const registerUser = async (req, res) => {
         _id: user._id,
         name: user.name,
         email: user.email,
+        isGoogle: user.isGoogle,
+        googleId: user.googleId,
+        avatar: user.avatar,
         university: user.university,
         course: user.course,
         year: user.year,
@@ -62,6 +68,9 @@ const loginUser = async (req, res) => {
         _id: user._id,
         name: user.name,
         email: user.email,
+        isGoogle: user.isGoogle,
+        googleId: user.googleId,
+        avatar: user.avatar,
         university: user.university,
         course: user.course,
         year: user.year,
@@ -87,7 +96,8 @@ const googleAuth = async (req, res) => {
     let user = await User.findOne({ email });
 
     if (user) {
-      // Update details if passed
+      // Update details and link Google status
+      user.isGoogle = true;
       if (!user.googleId && googleId) user.googleId = googleId;
       if (avatar) user.avatar = avatar;
       if (university && !user.university) user.university = university;
@@ -100,8 +110,8 @@ const googleAuth = async (req, res) => {
       user = await User.create({
         name,
         email,
-        googleId,
-        avatar,
+        googleId: googleId || '',
+        avatar: avatar || '',
         isGoogle: true,
         university: university || '',
         course: course || '',
@@ -116,6 +126,9 @@ const googleAuth = async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      isGoogle: user.isGoogle,
+      googleId: user.googleId,
+      avatar: user.avatar,
       university: user.university,
       course: user.course,
       year: user.year,
