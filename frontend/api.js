@@ -1,6 +1,8 @@
 // frontend/api.js - PrepLoop REST API Client for Phase 2 Backend
 const PrepAPI = (function () {
-  const BASE_URL = 'http://localhost:5000/api';
+  const BASE_URL = typeof window !== 'undefined' && window.location.port === '5000'
+    ? '/api'
+    : 'http://localhost:5000/api';
   const TOKEN_KEY = 'prepLoop.jwt_token';
 
   // Helper for Bearer Token
@@ -50,7 +52,10 @@ const PrepAPI = (function () {
   // Check if backend server is live
   async function isBackendOnline() {
     try {
-      const res = await fetch('http://localhost:5000/', { method: 'GET' });
+      const url = typeof window !== 'undefined' && window.location.port === '5000'
+        ? '/api/scheduler/slots'
+        : 'http://localhost:5000/api/scheduler/slots';
+      const res = await fetch(url, { method: 'GET' });
       return res.ok;
     } catch (e) {
       return false;
