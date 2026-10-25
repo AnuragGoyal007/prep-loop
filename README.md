@@ -1,8 +1,57 @@
 # Prep Loop
 
-> **Intelligent Technical Interview Preparation Workspace & Retention Engine**
+> **Full-Stack Technical Interview Preparation Workspace & Spaced Repetition Engine**
 
-Prep Loop is an engineering-grade interview preparation and peer practice tracker designed for computer science students and software engineering candidates. It unifies **SuperMemo SM-2 Spaced Repetition** for algorithmic mastery, **takeUforward (Striver's) Core CS Sheets** for fundamental subjects, **Conflict-Free Peer Mock Interview Scheduling**, and **Live LeetCode & GeeksforGeeks REST Analytics** into a responsive, client-side, local-first web application.
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Deployed-black?style=flat&logo=vercel)](https://prep-loop.vercel.app)
+[![Node.js Version](https://img.shields.io/badge/Node.js-v18+-green?style=flat&logo=node.js)](https://nodejs.org/)
+[![Express.js](https://img.shields.io/badge/Express-5.x-lightgrey?style=flat&logo=express)](https://expressjs.com/)
+[![MongoDB Atlas](https://img.shields.io/badge/MongoDB_Atlas-Cloud-forestgreen?style=flat&logo=mongodb)](https://cloud.mongodb.com/)
+[![JWT Auth](https://img.shields.io/badge/JWT-Protected-blue?style=flat&logo=jsonwebtokens)](https://jwt.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+Prep Loop is an engineering-grade interview preparation and peer practice tracker designed for computer science students and software engineering candidates. Built as a full-stack application (Phase 2), it unifies **SuperMemo SM-2 Spaced Repetition** for algorithmic retention, **takeUforward (Striver's) Core CS Sheets** for fundamental subjects, **Conflict-Free Peer Mock Interview Scheduling**, and **Live LeetCode & GeeksforGeeks REST Analytics** into a responsive web application powered by **Express.js**, **MongoDB Atlas**, and **Vercel Serverless**.
+
+---
+
+## 🏗️ Phase 2 Full-Stack Architecture
+
+Prep Loop has transitioned from a client-side prototype (Phase 1) to a full-stack, cloud-first architecture where **MongoDB Atlas is the sole source of truth**. Browser `localStorage` is strictly restricted to the JWT Bearer Token and theme preference.
+
+```mermaid
+graph TD
+    subgraph Client["Frontend Client (Vanilla SPA)"]
+        UI[Reactive UI / Dashboard]
+        APIClient["PrepAPI Client (frontend/api.js)"]
+        LocalStorage["localStorage (JWT Token + Theme Only)"]
+    end
+
+    subgraph Server["Backend REST API (Express.js / Vercel Serverless)"]
+        AuthRouter["Auth Router (/api/auth)"]
+        QRouter["Questions Router (/api/questions)"]
+        SchedRouter["Scheduler Router (/api/scheduler)"]
+        SheetRouter["Sheets Router (/api/sheets)"]
+        AuthMiddleware["JWT Verification Middleware"]
+    end
+
+    subgraph Database["Cloud Database (MongoDB Atlas)"]
+        UsersCol[("users Collection")]
+        QuestionsCol[("questions Collection")]
+        SlotsCol[("slots Collection")]
+        BookingsCol[("bookings Collection")]
+        SheetsCol[("sheettopics Collection")]
+    end
+
+    UI --> APIClient
+    APIClient <--> LocalStorage
+    APIClient -->|HTTPS / REST API| Server
+    AuthRouter --> AuthMiddleware
+    QRouter --> AuthMiddleware
+    AuthMiddleware --> UsersCol
+    QRouter --> QuestionsCol
+    SchedRouter --> SlotsCol
+    SchedRouter --> BookingsCol
+    SheetRouter --> SheetsCol
+```
 
 ---
 
@@ -13,8 +62,8 @@ Prep Loop provides a friction-free workflow from discovering features to onboard
 ```mermaid
 graph TD
     A[Landing Page] -->|Get Started / Sign Up| B[Student Registration]
-    A -->|Sign In| C[User Login]
-    B -->|Automatic Onboarding| D[Interactive Dashboard]
+    A -->|Sign In / Google OAuth| C[User Login]
+    B -->|Automatic Onboarding & JWT| D[Interactive Dashboard]
     C -->|Direct Session Auth| D
     D --> E[Striver's CS Core Sheets]
     D --> F[SM-2 Spaced Repetition Queue]
@@ -34,7 +83,7 @@ The hero section features an interactive live workspace showcase displaying a mi
 ![Prep Loop Landing Page Hero](assets/screenshots/landing-hero.png)
 
 #### 2. Core Capabilities Breakdown
-The landing page highlights the platform's four architectural pillars engineered for high-stakes technical interviews.
+The landing page highlights the platform's four architectural pillars engineered for high-stakes technical interviews:
 
 ![Prep Loop Core Features](assets/screenshots/landing-features.png)
 
@@ -47,24 +96,24 @@ The landing page highlights the platform's four architectural pillars engineered
 
 ### Step 2: Seamless Authentication & Onboarding
 
-Prep Loop features a local-first authentication system that isolates progress, question queues, custom notes, and interview bookings per user account.
+Prep Loop features secure authentication powered by Express.js, bcryptjs, and JWT, with full Google OAuth 2.0 single sign-on.
 
 #### 1. User Sign Up
 New students register with their academic background and optional public coding handles.
 
 ![Prep Loop User Signup](assets/screenshots/auth-signup.png)
 
-- **Mandatory Profile Details:** Full Name, Email, Password, University, Course/Branch, and Year of Study.
-- **Optional Coding Handles:** Connect LeetCode and GeeksforGeeks usernames for instant dashboard synchronization.
-- **Data Isolation:** Generates an isolated local profile workspace upon registration.
+- **Mandatory Profile Details:** Full Name, Email, Password (hashed with bcrypt, 10 salt rounds), University, Course/Branch, and Year of Study.
+- **Optional Coding Handles:** Connect LeetCode and GeeksforGeeks handles for instant dashboard synchronization.
+- **Cloud Persistence:** Creates an authenticated profile document in MongoDB Atlas and immediately issues a 30-day JWT Bearer token.
 
-#### 2. User Login
-Returning users authenticate with their email and password.
+#### 2. User Login & Google OAuth
+Returning users authenticate with their email and password or 1-click Google Sign-In.
 
 ![Prep Loop User Login](assets/screenshots/auth-login.png)
 
-- **Direct Dashboard Routing:** Immediately redirects users to the live workspace dashboard upon logging in.
-- **Session Continuity:** Preserves profile details, custom notes, review intervals, and schedule bookings across browser sessions.
+- **Direct Dashboard Routing:** Validates credentials against Atlas and transitions directly to the live dashboard.
+- **Session Continuity:** Validates the stored JWT token with `/api/auth/me` on every page load to resume the session automatically.
 
 ---
 
@@ -77,7 +126,7 @@ Displays user credentials, preparation metrics summary, and an overview of Core 
 
 ![Prep Loop Dashboard Profile and CS Readiness](assets/screenshots/dashboard-profile.png)
 
-- **👤 Student Profile Card:** Displays name, email, university, degree, year, and counts for questions logged, due reviews, and sessions. Includes an editable profile modal with photo upload support.
+- **👤 Student Profile Card:** Displays name, email, university, degree, year, and counts for questions logged, due reviews, and sessions. Includes an editable profile modal.
 - **🎯 Core CS Fundamentals Readiness:** Real-time completion bars across Operating Systems, DBMS, and Computer Networks, with smart alerts highlighting high-frequency interview questions.
 
 #### 2. Live Platform Sync & Review Queues
@@ -94,11 +143,11 @@ Connects public coding profiles to stream live statistics, problem counts, and 5
 
 ### Step 4: Striver's (takeUforward) CS Core Sheets
 
-Dedicated interview sheets covering the most frequently asked computer science theory questions across core subjects:
+Dedicated interview sheets covering the most frequently asked computer science theory questions across core subjects, populated from the `sheettopics` collection in Atlas:
 
 ![Prep Loop Striver CS Core Sheets](assets/screenshots/cs-core-sheets.png)
 
-- **3 Core Subjects:**
+- **3 Core Subjects (32 Curated Topics):**
   - **Operating Systems (12 Topics):** Process States, CPU Scheduling, Mutex vs. Semaphores, Deadlock (Banker's Algorithm), Paging & Virtual Memory.
   - **Database Management Systems (10 Topics):** ACID Properties, Normalization (1NF to BCNF), B/B+ Tree Indexing, Transactions & 2PL, SQL vs. NoSQL.
   - **Computer Networks (10 Topics):** OSI & TCP/IP 7 Layers, TCP 3-Way Handshake, Congestion Control, Subnetting/CIDR, DNS & HTTPS/TLS Handshake.
@@ -115,124 +164,187 @@ An implementation of the SuperMemo SM-2 algorithmic workflow for DSA problem ret
 ![Prep Loop Spaced Repetition Questions Tracker](assets/screenshots/questions-sm2.png)
 
 - **Log Question Attempts:** Record subject tag (`DSA`, `DBMS`, `CN`, `OS`), topic name, difficulty (`Easy`, `Medium`, `Hard`), solve duration, and outcome (`Solved` vs. `Missed`).
-- **In-Place Deduplication:** Repeated attempts on the same topic update the existing record rather than creating duplicate entries.
-- **Dynamic Recalculation:**
+- **In-Place Recalculation:** Re-attempts trigger `PUT /api/questions/:id` in Atlas:
   - Updates Ease Factor ($EF \ge 1.3$).
   - Extends intervals ($1\text{d} \to 6\text{d} \to \text{interval} \times EF$).
   - Resets intervals on missed attempts to ensure timely concept recovery.
-- **Review Queue Table:** Live tabular view displaying Topic, Subject Tag, Difficulty, Ease Factor, Current Interval, Next Review Date, and Total Attempts.
+- **Review Queue Table:** Live tabular view displaying Topic, Subject Tag, Difficulty, Ease Factor, Current Interval, Next Review Date, Total Attempts, and an in-table **Delete** action (`✕`).
 
 ---
 
 ### Step 6: Peer Mock Interview Scheduler
 
-A scheduling engine for 1-on-1 peer mock interviews:
+A scheduling engine for 1-on-1 peer mock interviews synchronized via MongoDB Atlas:
 
 ![Prep Loop Peer Mock Interview Scheduler](assets/screenshots/schedule-grid.png)
 
 - **Weekly 7-Day Availability Grid:** Interactive matrix covering Monday through Sunday from 07:00 to 22:00.
-- **Direct Cell Offering:** Click any open calendar cell (`+ Offer`) to pre-fill and offer a mock session.
+- **Direct Cell Offering:** Click any open calendar cell (`+ Offer`) to pre-fill and offer a mock session in Atlas.
 - **Custom Duration & Presets:** Choose from 30, 45, 60, or 90-minute session lengths or use 1-click time chips.
 - **Mathematical Overlap Protection:** Prevents self-booking, double-booking, and overlapping session collisions.
-- **Lifecycle Management:** Role-based controls to confirm, mark done (with session conclusion time validation), reject, or cancel sessions.
+- **Lifecycle Management:** Role-based controls to confirm, mark done (with session conclusion time validation), reject, or cancel sessions (which automatically frees the slot in Atlas).
 - **My Bookings Dashboard:** Chronological list of hosted and requested sessions with direct action controls and post-interview rating rubrics (Communication, Problem Solving, Code Quality on a 1–5 scale).
 
 ---
 
-## 🚀 Run Locally
+## 🔌 REST API Specification
 
-No compilation steps, external servers, or package installations are required.
+### Authentication Endpoints (`/api/auth`)
+| Method | Endpoint | Description | Protected |
+|---|---|---|:---:|
+| `POST` | `/api/auth/register` | Register new student profile & issue JWT | No |
+| `POST` | `/api/auth/login` | Authenticate with email & password | No |
+| `POST` | `/api/auth/google` | Google OAuth token exchange & user sync | No |
+| `GET` | `/api/auth/me` | Fetch active user profile from token claims | **Yes** |
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/AnuragGoyal007/prep-loop.git
-   cd prep-loop
-   ```
+### Questions Endpoints (`/api/questions`)
+| Method | Endpoint | Description | Protected |
+|---|---|---|:---:|
+| `GET` | `/api/questions` | Get all questions logged by active user | **Yes** |
+| `POST` | `/api/questions` | Log new question attempt with SM-2 parameters | **Yes** |
+| `PUT` | `/api/questions/:id` | Update SM-2 interval/easeFactor on revision | **Yes** |
+| `DELETE` | `/api/questions/:id` | Delete question from revision queue | **Yes** |
 
-2. **Open directly in your browser:**
-   Double-click [`index.html`](index.html) or launch it using any static server:
-   ```bash
-   # Python 3
-   python -m http.server 3000
+### Mock Scheduler Endpoints (`/api/scheduler`)
+| Method | Endpoint | Description | Protected |
+|---|---|---|:---:|
+| `GET` | `/api/scheduler/slots` | Fetch all open & booked interview slots | No |
+| `POST` | `/api/scheduler/slots` | Create a new offered interview slot | No |
+| `DELETE` | `/api/scheduler/slots/:id` | Remove an offered slot from Atlas | No |
+| `GET` | `/api/scheduler/bookings` | Fetch all bookings with populated slots | No |
+| `POST` | `/api/scheduler/bookings` | Book an open interview slot | No |
+| `DELETE` | `/api/scheduler/bookings/:id` | Cancel/reject booking & release slot | No |
+| `POST` | `/api/scheduler/bookings/:id/feedback` | Submit reflection rating & comments | No |
 
-   # Node.js (npx)
-   npx serve .
-   ```
-
-3. **Access in browser:** Navigate to `http://localhost:3000`.
+### Striver CS Sheets Endpoints (`/api/sheets`)
+| Method | Endpoint | Description | Protected |
+|---|---|---|:---:|
+| `GET` | `/api/sheets` or `/api/sheets/core` | Get all 32 curated Core CS topics | No |
+| `GET` | `/api/sheets/core/:topicId` | Fetch a specific CS sheet topic by ID | No |
 
 ---
 
-## 📁 Project Structure
+## 🚀 Running Locally
 
-```text
-prep-loop/
-├── assets/
-│   └── screenshots/          # Application walkthrough screenshots
-│       ├── landing-hero.png
-│       ├── landing-features.png
-│       ├── auth-login.png
-│       ├── auth-signup.png
-│       ├── dashboard-profile.png
-│       ├── dashboard-platforms.png
-│       ├── cs-core-sheets.png
-│       ├── questions-sm2.png
-│       └── schedule-grid.png
-├── cs_sheets_data.js         # TakeUforward CS Core questions dataset (OS, DBMS, CN)
-├── sm2.js                    # Pure SuperMemo SM-2 spaced repetition algorithm
-├── scheduler.js              # Pure scheduling & interval conflict-checking logic
-├── storage.js                # LocalStorage abstraction & user-isolated caching
-├── app.js                    # Main application controller & reactive DOM rendering
-├── style.css                 # Custom design tokens, layout grids, and dark theme
-├── index.html                # Semantic HTML structure & accessible dialogs
-└── README.md                 # Complete documentation & user guide
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18.0.0 or later recommended)
+- A [MongoDB Atlas](https://cloud.mongodb.com/) cluster connection string (or local MongoDB)
+
+### 1. Clone & Install Dependencies
+```bash
+git clone https://github.com/AnuragGoyal007/prep-loop.git
+cd prep-loop
+npm install
+```
+
+### 2. Configure Environment Variables
+Create a `.env` file in the project root:
+```env
+PORT=5000
+MONGO_URI=mongodb+srv://<username>:<password>@cluster0.bmlcmfy.mongodb.net/preploop?retryWrites=true&w=majority
+JWT_SECRET=your_super_secret_jwt_key_here
+```
+
+### 3. Seed Database Topics
+Seed the 32 Striver Core CS sheet topics into your Atlas cluster:
+```bash
+npm run seed
+```
+
+### 4. Run Development Server
+```bash
+npm run dev
+```
+Navigate to `http://localhost:5000` in your browser. Both the backend API and frontend static files will be served together.
+
+---
+
+## 🧪 Automated System Audit & Test Suite
+
+Prep Loop includes an end-to-end audit suite that tests user registration, Google OAuth, question logging, SM-2 interval updates, slot booking, feedback submission, and database resetting:
+
+```bash
+npm run test:audit
+```
+
+To wipe test data and restore a clean slate with seeded topics anytime:
+```bash
+npm run reset-db
 ```
 
 ---
 
-## 💾 Local Storage Architecture
+## 📁 Monorepo Project Structure
 
-All user data persists in browser `localStorage` with safe fallback handling:
-
-| Storage Key | Description |
-|---|---|
-| `prepLoop.users` | Array of registered user profile objects and credentials |
-| `prepLoop.currentUser` | Active authenticated session object |
-| `prepLoop.whoami` | Active display name fallback |
-| `prepLoop.theme` | Color scheme preference (`light` / `dark`) |
-| `prepLoop.questions` | Logged question attempts with SM-2 state and review schedules |
-| `prepLoop.csCoreProgress` | Striver's CS Core topic completion, bookmarks, and revision notes |
-| `prepLoop.slots` | Offered peer mock availability slots |
-| `prepLoop.bookings` | Confirmed mock interview sessions and peer feedback |
-| `prepLoop.leetCodeProfiles` | LeetCode usernames mapped per account |
-| `prepLoop.gfgProfiles` | GeeksforGeeks handles mapped per account |
-| `prepLoop.gfgCache` | Cached GFG stats & heatmap payload for instant loads |
+```text
+prep-loop/
+├── api/
+│   └── index.js              # Vercel Serverless Function entrypoint
+├── assets/
+│   └── screenshots/          # High-resolution README walkthrough images
+│       ├── auth-login.png
+│       ├── auth-signup.png
+│       ├── cs-core-sheets.png
+│       ├── dashboard-platforms.png
+│       ├── dashboard-profile.png
+│       ├── landing-features.png
+│       ├── landing-hero.png
+│       ├── questions-sm2.png
+│       └── schedule-grid.png
+├── backend/
+│   ├── config/
+│   │   └── db.js             # Mongoose connection with DNS bypass & serverless caching
+│   ├── controllers/
+│   │   ├── authController.js       # Register, Login, Google OAuth, getMe
+│   │   ├── questionController.js   # CRUD + SM-2 recalculation
+│   │   ├── schedulerController.js  # Slot & Booking lifecycle + Feedback
+│   │   └── sheetController.js      # Striver Core CS topics
+│   ├── middleware/
+│   │   └── authMiddleware.js       # JWT Bearer token verification
+│   ├── models/
+│   │   ├── Booking.js        # Peer booking schema
+│   │   ├── Question.js       # SM-2 algorithmic question schema
+│   │   ├── SheetTopic.js     # Curated CS Core topics schema
+│   │   ├── Slot.js           # Interview slot availability schema
+│   │   └── User.js           # User schema with bcrypt password hashing
+│   ├── routes/
+│   │   ├── authRoutes.js
+│   │   ├── questionRoutes.js
+│   │   ├── schedulerRoutes.js
+│   │   └── sheetRoutes.js
+│   ├── resetDB.js            # Automated database wipe & seeder script
+│   ├── seeder.js             # Seed 32 Core CS sheet topics into Atlas
+│   ├── server.js             # Main Express application & static serving
+│   └── testSuite.js          # Automated end-to-end test & verification suite
+├── frontend/
+│   ├── api.js                # Centralized REST API client (JWT & endpoint wrapper)
+│   ├── app.js                # Reactive UI controller & event handlers
+│   ├── cs_sheets_data.js     # Static Core CS questions metadata
+│   ├── index.html            # Semantic HTML5 single-page application
+│   ├── scheduler.js          # Pure time-overlap math & scheduling rules
+│   ├── sm2.js                # SuperMemo SM-2 spaced repetition mathematical engine
+│   ├── storage.js            # In-memory session store & theme persistence
+│   └── style.css             # Vanilla CSS design system, typography, & dark mode
+├── package.json              # Monorepo dependencies & npm scripts
+├── vercel.json               # Serverless rewrites (/api -> api/index.js, / -> frontend)
+└── README.md                 # Complete project documentation
+```
 
 ---
 
-## 🛠️ Technology Stack
+## 🌐 Deploying to Vercel
 
-- **Frontend Core:** Semantic HTML5, Vanilla JavaScript (ES6+), Vanilla CSS3 (Custom Design Tokens, Flexbox, CSS Grid)
-- **Typography:** Google Fonts ([Fraunces](https://fonts.google.com/specimen/Fraunces), [IBM Plex Sans](https://fonts.google.com/specimen/IBM+Plex+Sans), [IBM Plex Mono](https://fonts.google.com/specimen/IBM+Plex+Mono))
-- **Live APIs:**
-  - LeetCode Card API (`leetcard.jacoblin.cool`)
-  - GeeksforGeeks REST Stats API (`gfg-stats-api.vercel.app` / `gfg-stats.tashif.codes`)
-- **Algorithms:** SM-2 Spaced Repetition, Interval Overlap Mathematical Collision Detection
-- **Storage:** Browser LocalStorage with zero external database dependencies
-
----
-
-## 🔮 Phase 2 Roadmap
-
-Future full-stack extensions for Prep Loop:
-- [ ] Express.js / Node.js backend with JWT and OAuth2 integration.
-- [ ] MongoDB database for cross-device synchronization and shared interview rooms.
-- [ ] WebSockets / WebRTC for live coding rooms, video calls, and instant booking notifications.
-- [ ] AI-assisted mock interviewer powered by Gemini for automated code quality and communication feedback.
+1. Push your repository to GitHub.
+2. In the [Vercel Dashboard](https://vercel.com), import the `prep-loop` repository.
+3. Under **Settings → Environment Variables**, add:
+   - `MONGO_URI`: Your MongoDB Atlas connection string.
+   - `JWT_SECRET`: Your secret JWT key.
+4. In [MongoDB Atlas](https://cloud.mongodb.com/) under **Network Access**, ensure `0.0.0.0/0` (Allow Access from Anywhere) is enabled so Vercel's serverless functions can connect.
+5. Click **Deploy**. Vercel will build the root monorepo using `vercel.json` rewrites.
 
 ---
 
 ## 📄 License & Course Information
 
-Developed as a **Local-First Web Engineering Course Project (BEE Course - Phase 1)**.  
+Developed as a **Full-Stack Web Engineering Course Project (BEE Course - Phase 2)**.  
 Released under the [MIT License](LICENSE).
