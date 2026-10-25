@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js",
-    "seed": "node backend/seeder.js"
+    "seed": "node backend/seeder.js",
+    "reset-db": "node backend/resetDB.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -5,6 +5,7 @@ const path = require('path');
 const SheetTopic = require('./models/SheetTopic');
 const connectMongoDB = require('./config/db');
 
+dotenv.config({ path: path.join(__dirname, '.env') });
 dotenv.config();
 
 // Fix for Node on Windows querySrv ECONNREFUSED with MongoDB Atlas
