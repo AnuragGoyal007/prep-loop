@@ -36,6 +36,33 @@ const addQuestion = async (req, res) => {
   }
 };
 
+// @desc    Update a question (SM-2 revision attempt recalculation)
+// @route   PUT /api/questions/:id
+const updateQuestion = async (req, res) => {
+  try {
+    const question = await Question.findOne({ _id: req.params.id, user: req.user._id });
+    if (!question) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+
+    const { tag, difficulty, outcome, timeTaken, repetition, interval, easeFactor, nextReviewDate } = req.body;
+
+    if (tag) question.tag = tag;
+    if (difficulty) question.difficulty = difficulty;
+    if (outcome) question.outcome = outcome;
+    if (timeTaken !== undefined) question.timeTaken = timeTaken;
+    if (repetition !== undefined) question.repetition = repetition;
+    if (interval !== undefined) question.interval = interval;
+    if (easeFactor !== undefined) question.easeFactor = easeFactor;
+    if (nextReviewDate) question.nextReviewDate = nextReviewDate;
+
+    const updated = await question.save();
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Delete a question
 // @route   DELETE /api/questions/:id
 const deleteQuestion = async (req, res) => {
@@ -50,4 +77,4 @@ const deleteQuestion = async (req, res) => {
   }
 };
 
-module.exports = { getQuestions, addQuestion, deleteQuestion };
+module.exports = { getQuestions, addQuestion, updateQuestion, deleteQuestion };

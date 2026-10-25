@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getQuestions, addQuestion, deleteQuestion } = require('../controllers/questionController');
+const { getQuestions, addQuestion, updateQuestion, deleteQuestion } = require('../controllers/questionController');
 const { protect } = require('../middleware/authMiddleware');
 
 router.route('/')
@@ -8,6 +8,7 @@ router.route('/')
   .post(protect, addQuestion);
 
 router.route('/:id')
+  .put(protect, updateQuestion)
   .delete(protect, deleteQuestion);
 
 module.exports = router;

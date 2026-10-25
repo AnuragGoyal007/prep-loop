@@ -74,4 +74,33 @@ const submitFeedback = async (req, res) => {
   }
 };
 
-module.exports = { getSlots, createSlot, getBookings, bookSlot, submitFeedback };
+// @desc    Delete an interview slot
+// @route   DELETE /api/scheduler/slots/:id
+const deleteSlot = async (req, res) => {
+  try {
+    const slot = await Slot.findByIdAndDelete(req.params.id);
+    if (!slot) return res.status(404).json({ message: 'Slot not found' });
+    await Booking.deleteMany({ slotId: req.params.id });
+    res.json({ message: 'Slot removed successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Cancel booking & free up slot
+// @route   DELETE /api/scheduler/bookings/:id
+const cancelBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+    if (booking.slotId) {
+      await Slot.findByIdAndUpdate(booking.slotId, { isBooked: false });
+    }
+    await Booking.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Booking cancelled and slot freed' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { getSlots, createSlot, deleteSlot, getBookings, bookSlot, cancelBooking, submitFeedback };

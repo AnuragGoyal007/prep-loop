@@ -119,6 +119,13 @@ const PrepAPI = (function () {
       });
     },
 
+    async update(id, questionData) {
+      return await request(`/questions/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(questionData)
+      });
+    },
+
     async delete(id) {
       return await request(`/questions/${id}`, { method: 'DELETE' });
     }
@@ -137,6 +144,10 @@ const PrepAPI = (function () {
       });
     },
 
+    async deleteSlot(id) {
+      return await request(`/scheduler/slots/${id}`, { method: 'DELETE' });
+    },
+
     async getBookings() {
       return await request('/scheduler/bookings', { method: 'GET' });
     },
@@ -146,6 +157,10 @@ const PrepAPI = (function () {
         method: 'POST',
         body: JSON.stringify({ slotId, requesterName })
       });
+    },
+
+    async cancelBooking(id) {
+      return await request(`/scheduler/bookings/${id}`, { method: 'DELETE' });
     },
 
     async submitFeedback(bookingId, feedbackData) {

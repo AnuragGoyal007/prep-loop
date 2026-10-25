@@ -1768,6 +1768,9 @@ function renderQuestions() {
         <td class="mono">${q.interval}d</td>
         <td class="mono ${dueClass}">${escapeHtml(q.nextReviewDate)}${dueTag}</td>
         <td class="mono">${attemptsCount}</td>
+        <td class="action-cell">
+          <button type="button" class="icon-button" data-delete-q="${q._id || q.id}" title="Remove question" style="color:var(--red); font-size:13px; padding:2px 7px; border:1px solid var(--line); border-radius:6px; background:var(--surface); cursor:pointer;">✕</button>
+        </td>
       </tr>
     `;
   }
@@ -1784,6 +1787,7 @@ function renderQuestions() {
             <th>Interval</th>
             <th>Next review</th>
             <th>Attempts</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -1830,7 +1834,22 @@ function onQuestionSubmit(event) {
     if (difficulty) existing.difficulty = difficulty;
     questions[existingIndex] = SM2.recalculate(existing, isCorrect, timeTaken);
     savedQuestion = questions[existingIndex];
-    showToast(`Attempt added to “${topic}” [${tag}].`);
+    showToast(`Attempt updated for “${topic}” [${tag}]. Next review in ${savedQuestion.interval}d.`);
+
+    // Sync SM-2 revision with Atlas
+    let qId = savedQuestion._id || savedQuestion.id;
+    if (typeof PrepAPI !== "undefined" && PrepAPI.getToken() && qId) {
+      PrepAPI.questions.update(qId, {
+        tag: savedQuestion.tag,
+        difficulty: savedQuestion.difficulty,
+        outcome: outcome,
+        timeTaken: savedQuestion.timeTaken,
+        repetition: savedQuestion.repetition,
+        interval: savedQuestion.interval,
+        easeFactor: savedQuestion.easeFactor,
+        nextReviewDate: savedQuestion.nextReviewDate
+      }).catch(err => console.warn("Could not sync revision to backend:", err));
+    }
   } else {
     let newQ = SM2.newQuestion({
       id: PrepStorage.uid(),
@@ -1843,24 +1862,29 @@ function onQuestionSubmit(event) {
     questions.push(newQ);
     savedQuestion = newQ;
     showToast(`“${topic}” [${tag}] added to your review queue.`);
+
+    // Sync new question with Atlas
+    if (typeof PrepAPI !== "undefined" && PrepAPI.getToken()) {
+      PrepAPI.questions.add({
+        topic: savedQuestion.topic,
+        tag: savedQuestion.tag,
+        difficulty: savedQuestion.difficulty,
+        outcome: outcome,
+        timeTaken: savedQuestion.timeTaken,
+        repetition: savedQuestion.repetition,
+        interval: savedQuestion.interval,
+        easeFactor: savedQuestion.easeFactor,
+        nextReviewDate: savedQuestion.nextReviewDate
+      }).then(res => {
+        if (res.success && res.data && res.data._id) {
+          savedQuestion._id = res.data._id;
+          savedQuestion.id = res.data._id;
+        }
+      }).catch(err => console.warn("Could not save question to backend:", err));
+    }
   }
 
   PrepStorage.setQuestions(questions);
-
-  // Sync with MongoDB backend if user has a token
-  if (typeof PrepAPI !== "undefined" && PrepAPI.getToken() && savedQuestion) {
-    PrepAPI.questions.add({
-      topic: savedQuestion.topic,
-      tag: savedQuestion.tag,
-      difficulty: savedQuestion.difficulty,
-      outcome: outcome,
-      timeTaken: savedQuestion.timeTaken,
-      repetition: savedQuestion.repetition,
-      interval: savedQuestion.interval,
-      easeFactor: savedQuestion.easeFactor,
-      nextReviewDate: savedQuestion.nextReviewDate
-    });
-  }
 
   form.reset();
   if (form.elements["tag"]) form.elements["tag"].value = "";
@@ -2124,6 +2148,11 @@ function onOfferSubmit(event) {
       time: normalizedTime,
       tag: topic || "DSA",
       link: ""
+    }).then(res => {
+      if (res.success && res.data && res.data._id) {
+        newSlot._id = res.data._id;
+        newSlot.id = res.data._id;
+      }
     }).catch(err => console.warn("Could not save slot to backend:", err));
   }
 
@@ -2137,7 +2166,7 @@ function removeSlot(slotId) {
   let slots = PrepStorage.getSlots();
   let bookings = PrepStorage.getBookings();
 
-  let slotIndex = slots.findIndex(function (s) { return s.id === slotId; });
+  let slotIndex = slots.findIndex(function (s) { return (s.id === slotId || s._id === slotId); });
   if (slotIndex === -1) {
     showToast("Slot not found.");
     return;
@@ -2150,7 +2179,7 @@ function removeSlot(slotId) {
   }
 
   let hasActiveBooking = bookings.some(function (b) {
-    return b.slotId === slotId && b.status !== "cancelled";
+    return (b.slotId === slotId || b.slotId === targetSlot._id) && b.status !== "cancelled";
   });
 
   if (hasActiveBooking) {
@@ -2158,9 +2187,14 @@ function removeSlot(slotId) {
     return;
   }
 
+  let mongoSlotId = targetSlot._id || targetSlot.id;
   slots.splice(slotIndex, 1);
   PrepStorage.setSlots(slots);
   showToast(`Removed slot for ${targetSlot.day} at ${Scheduler.formatDisplayTime(targetSlot.time)}.`);
+
+  if (typeof PrepAPI !== "undefined" && mongoSlotId) {
+    PrepAPI.scheduler.deleteSlot(mongoSlotId).catch(err => console.warn("Could not delete slot from backend:", err));
+  }
   renderAll();
 }
 
@@ -2272,24 +2306,38 @@ function markDone(id) {
 // Rejects an interview booking and releases the slot
 function rejectBooking(id) {
   let bookings = PrepStorage.getBookings();
-  let target = bookings.find(function (b) { return b.id === id; });
+  let target = bookings.find(function (b) { return (b.id === id || b._id === id); });
   if (!target) return;
 
   target.status = "cancelled";
   PrepStorage.setBookings(bookings);
   showToast("Booking rejected and slot is open again.");
+
+  let mongoBookingId = target._id || target.id;
+  if (typeof PrepAPI !== "undefined" && mongoBookingId) {
+    PrepAPI.scheduler.cancelBooking(mongoBookingId).then(() => {
+      syncSchedulerFromBackend().then(() => renderAll());
+    }).catch(err => console.warn("Could not cancel booking on backend:", err));
+  }
   renderAll();
 }
 
 // Cancels an existing interview booking request
 function cancelBooking(id) {
   let bookings = PrepStorage.getBookings();
-  let target = bookings.find(function (b) { return b.id === id; });
+  let target = bookings.find(function (b) { return (b.id === id || b._id === id); });
   if (!target) return;
 
   target.status = "cancelled";
   PrepStorage.setBookings(bookings);
   showToast("Meeting cancelled and slot is open again.");
+
+  let mongoBookingId = target._id || target.id;
+  if (typeof PrepAPI !== "undefined" && mongoBookingId) {
+    PrepAPI.scheduler.cancelBooking(mongoBookingId).then(() => {
+      syncSchedulerFromBackend().then(() => renderAll());
+    }).catch(err => console.warn("Could not cancel booking on backend:", err));
+  }
   renderAll();
 }
 
@@ -2631,6 +2679,26 @@ function initialize() {
       openOfferForSlot(day, time);
     }
   });
+
+  let questionsTableWrap = document.getElementById("questions-table-wrap");
+  if (questionsTableWrap) {
+    questionsTableWrap.addEventListener("click", function (event) {
+      let deleteBtn = event.target.closest("[data-delete-q]");
+      if (deleteBtn) {
+        let qId = deleteBtn.getAttribute("data-delete-q");
+        if (confirm("Remove this question from your spaced repetition queue?")) {
+          let questions = PrepStorage.getQuestions();
+          questions = questions.filter(q => (q._id !== qId && q.id !== qId));
+          PrepStorage.setQuestions(questions);
+          if (typeof PrepAPI !== "undefined" && PrepAPI.getToken()) {
+            PrepAPI.questions.delete(qId).catch(err => console.warn("Delete question error:", err));
+          }
+          renderAll();
+          showToast("Question removed from Atlas queue.");
+        }
+      }
+    });
+  }
 
   document.getElementById("bookings-table-wrap").addEventListener("click", function (event) {
     let doneBtn = event.target.closest("[data-done]");

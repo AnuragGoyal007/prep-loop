@@ -6,7 +6,8 @@
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js",
     "seed": "node backend/seeder.js",
-    "reset-db": "node backend/resetDB.js"
+    "reset-db": "node backend/resetDB.js",
+    "test:audit": "node backend/testSuite.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
