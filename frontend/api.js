@@ -1,8 +1,11 @@
 // frontend/api.js - PrepLoop REST API Client for Phase 2 Backend
 const PrepAPI = (function () {
-  const BASE_URL = typeof window !== 'undefined' && window.location.port === '5000'
-    ? '/api'
-    : 'http://localhost:5000/api';
+  const isUnifiedHost = typeof window !== 'undefined' && (
+    window.location.port === '5000' ||
+    window.location.hostname.endsWith('.vercel.app') ||
+    (window.location.protocol === 'https:' && !window.location.hostname.includes('localhost'))
+  );
+  const BASE_URL = isUnifiedHost ? '/api' : 'http://localhost:5000/api';
   const TOKEN_KEY = 'prepLoop.jwt_token';
 
   // Helper for Bearer Token
