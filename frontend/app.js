@@ -50,6 +50,11 @@ function applyTheme(theme) {
     landingToggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
     landingToggle.title = isDark ? "Switch to light mode" : "Switch to dark mode";
   }
+
+  // Refresh Google button styling with matching theme if initialized
+  if (typeof initGoogleAuth === "function") {
+    initGoogleAuth();
+  }
 }
 
 // Toggles theme state between light and dark and persists to storage
@@ -266,6 +271,14 @@ function switchAuthMode(mode) {
     signupForm.hidden = false;
   }
 
+  // Restore Google auth section and divider if user is not in the middle of Google verification
+  if (!googlePendingAuth) {
+    let googleSection = document.getElementById("google-auth-section");
+    let authDivider = document.getElementById("auth-divider");
+    if (googleSection) googleSection.hidden = false;
+    if (authDivider) authDivider.hidden = false;
+  }
+
   authTabs.forEach(function (tab) {
     let isActive = tab.getAttribute("data-auth-tab") === mode;
     if (isActive) {
@@ -309,7 +322,12 @@ function getEffectiveGoogleClientId() {
 // Initializes official Google Identity Services & OAuth 2.0 Token Client
 function initGoogleAuth() {
   let clientId = getEffectiveGoogleClientId();
+  let triggerBtn = document.getElementById("google-auth-trigger-btn");
+  let slot = document.getElementById("g_id_signin_slot");
+
   if (!clientId || clientId.includes("placeholder")) {
+    if (triggerBtn) triggerBtn.style.display = "flex";
+    if (slot) slot.innerHTML = "";
     return;
   }
 
@@ -336,11 +354,12 @@ function initGoogleAuth() {
         callback: handleGoogleCredentialResponse,
         auto_select: false
       });
-      let slot = document.getElementById("g_id_signin_slot");
+
       if (slot && window.location.protocol.startsWith("http")) {
         slot.innerHTML = "";
+        let isDark = document.body.classList.contains("theme-dark");
         google.accounts.id.renderButton(slot, {
-          theme: "outline",
+          theme: isDark ? "filled_black" : "outline",
           size: "large",
           type: "standard",
           shape: "pill",
@@ -348,11 +367,27 @@ function initGoogleAuth() {
           logo_alignment: "left",
           width: 320
         });
+
+        // Hide custom trigger button when official Google Identity Services button is rendered
+        // This ensures the user does NOT see 2 Google buttons at once
+        if (triggerBtn) {
+          triggerBtn.style.display = "none";
+        }
       }
     } catch (e) {
-      // Origin not registered or file:// protocol
+      // Fallback: If GIS fails or blocked, keep custom trigger button visible
+      if (triggerBtn) {
+        triggerBtn.style.display = "flex";
+      }
     }
   }
+}
+
+// Automatically invoke initGoogleAuth once Google Identity script loads
+if (typeof window !== "undefined") {
+  window.onGoogleLibraryLoad = function () {
+    initGoogleAuth();
+  };
 }
 
 // Callback handler for official Google OAuth 2.0 Token popup
@@ -541,8 +576,12 @@ async function processGoogleUser(googleData) {
           signupForm.elements["email"].value = user.email;
           signupForm.elements["name"].readOnly = true;
           signupForm.elements["email"].readOnly = true;
-          if (!signupForm.elements["password"].value) {
-            signupForm.elements["password"].value = "GoogleAuth@" + cleanEmail.split("@")[0].slice(0, 4);
+          // Ensure password is NOT entered by default when fetching details from Google OAuth
+          signupForm.elements["password"].value = "";
+          signupForm.elements["password"].required = false;
+          let pwdInput = signupForm.elements["password"];
+          if (pwdInput) {
+            pwdInput.placeholder = "Optional (already verified via Google)";
           }
           let verifiedBanner = document.getElementById("google-verified-banner");
           let verifiedEmailElem = document.getElementById("google-verified-email");
@@ -550,6 +589,11 @@ async function processGoogleUser(googleData) {
             verifiedEmailElem.textContent = `${cleanEmail} (Verified via Google)`;
             verifiedBanner.hidden = false;
           }
+          // Hide top Google buttons and divider since user is already Google-verified
+          let googleSection = document.getElementById("google-auth-section");
+          let authDivider = document.getElementById("auth-divider");
+          if (googleSection) googleSection.hidden = true;
+          if (authDivider) authDivider.hidden = true;
         }
         showToast("Google verified! Please fill in your university and branch details.");
         return;
@@ -592,10 +636,17 @@ function clearGooglePendingAuth() {
   if (signupForm) {
     signupForm.elements["name"].readOnly = false;
     signupForm.elements["email"].readOnly = false;
+    signupForm.elements["password"].value = "";
+    signupForm.elements["password"].required = true;
+    signupForm.elements["password"].placeholder = "Create a password (min 4 characters)";
     let verifiedBanner = document.getElementById("google-verified-banner");
     if (verifiedBanner) {
       verifiedBanner.hidden = true;
     }
+    let googleSection = document.getElementById("google-auth-section");
+    let authDivider = document.getElementById("auth-divider");
+    if (googleSection) googleSection.hidden = false;
+    if (authDivider) authDivider.hidden = false;
   }
 }
 // Synchronizes questions from MongoDB backend into local storage
@@ -743,24 +794,30 @@ async function handleSignup(event) {
   let gfg = form.elements["gfg"] ? form.elements["gfg"].value.trim() : "";
   let github = form.elements["github"] ? form.elements["github"].value.trim().replace(/^@/, "") : "";
 
-  if (googlePendingAuth && (!password || password.length < 4)) {
-    password = "GoogleAuth@" + googlePendingAuth.email.split("@")[0].slice(0, 4) + "!" + String(Date.now()).slice(-4);
-  }
-
-  if (!name || !email || !password || !university || !course || !year) {
-    showToast("Please fill in all mandatory fields (Name, Email, Password, University, Course, Year).");
-    return;
-  }
-
-  if (password.length < 4) {
-    showToast("Password must be at least 4 characters long.");
-    return;
+  if (!googlePendingAuth) {
+    if (!name || !email || !password || !university || !course || !year) {
+      showToast("Please fill in all mandatory fields (Name, Email, Password, University, Course, Year).");
+      return;
+    }
+    if (password.length < 4) {
+      showToast("Password must be at least 4 characters long.");
+      return;
+    }
+  } else {
+    // For Google verified users, academic fields are mandatory, but password is NOT entered by default and is optional
+    if (!name || !email || !university || !course || !year) {
+      showToast("Please fill in all mandatory academic fields (University, Course, Year).");
+      return;
+    }
+    if (password && password.length < 4) {
+      showToast("If providing a password, it must be at least 4 characters long.");
+      return;
+    }
   }
 
   let newUser = {
     name: name,
     email: email,
-    password: password,
     university: university,
     course: course,
     year: year,
@@ -768,6 +825,10 @@ async function handleSignup(event) {
     gfg: gfg,
     github: github
   };
+
+  if (password && password.length >= 4) {
+    newUser.password = password;
+  }
 
   if (googlePendingAuth) {
     newUser.isGoogle = true;

@@ -240,8 +240,8 @@
         </div>
 
         <!-- Google OAuth Action -->
-        <div class="google-auth-section">
-          <button type="button" class="button google-auth-btn" id="google-auth-trigger-btn" aria-label="Continue with Google">
+        <div id="google-auth-section" class="google-auth-section">
+          <button type="button" class="google-auth-btn" id="google-auth-trigger-btn" aria-label="Continue with Google">
             <svg class="google-svg" viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -253,7 +253,7 @@
           <div id="g_id_signin_slot" class="g-signin-slot"></div>
         </div>
 
-        <div class="auth-divider">
+        <div id="auth-divider" class="auth-divider">
           <span>or continue with email & password</span>
         </div>
 
@@ -275,7 +275,7 @@
         <form id="signup-form" class="auth-form" hidden novalidate>
           <label>Full name<input name="name" type="text" placeholder="Your name" required maxlength="60" /></label>
           <label>Email<input name="email" type="email" placeholder="you@example.com" required /></label>
-          <label>Password<input name="password" type="password" placeholder="Create a password (min 4 characters)" required minlength="4" /></label>
+          <label id="signup-password-label">Password<input name="password" id="signup-password-input" type="password" placeholder="Create a password (min 4 characters)" required minlength="4" /></label>
           <div class="auth-row-grid">
             <label>University<input name="university" type="text" placeholder="e.g. Stanford University" required maxlength="120" /></label>
             <label>Course / Branch<input name="course" type="text" placeholder="e.g. Computer Science" required maxlength="120" /></label>
