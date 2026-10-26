@@ -16,8 +16,19 @@ const getSlots = async (req, res) => {
 // @route   POST /api/scheduler/slots
 const createSlot = async (req, res) => {
   try {
-    const { hostName, day, time, tag, link } = req.body;
-    const slot = await Slot.create({ hostName, day, time, tag, link });
+    const { hostName, day, time, tag, topic, duration, link } = req.body;
+    const finalTopic = topic || tag || 'DSA';
+    const finalTag = tag || topic || 'DSA';
+    const finalDuration = Number(duration) || 60;
+    const slot = await Slot.create({
+      hostName,
+      day,
+      time,
+      tag: finalTag,
+      topic: finalTopic,
+      duration: finalDuration,
+      link: link || ''
+    });
     res.status(201).json(slot);
   } catch (error) {
     res.status(500).json({ message: error.message });

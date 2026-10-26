@@ -679,20 +679,39 @@ async function syncSchedulerFromBackend() {
       PrepAPI.scheduler.getBookings()
     ]);
 
-    if (slotsRes.success && Array.isArray(slotsRes.data) && slotsRes.data.length > 0) {
-      let backendSlots = slotsRes.data.map(s => ({
-        ...s,
-        id: s._id || s.id
-      }));
+    if (slotsRes && slotsRes.success && Array.isArray(slotsRes.data)) {
+      let backendSlots = slotsRes.data.map(s => {
+        let rawDay = String(s.day || "").trim();
+        let normDay = rawDay.length >= 3 
+          ? (rawDay.charAt(0).toUpperCase() + rawDay.slice(1, 3).toLowerCase()) 
+          : rawDay;
+
+        return {
+          ...s,
+          id: String(s._id || s.id),
+          _id: String(s._id || s.id),
+          day: normDay,
+          time: Scheduler.normalizeTime(s.time),
+          topic: s.topic || s.tag || "",
+          tag: s.tag || s.topic || "DSA",
+          duration: Number(s.duration) || 60,
+          isBooked: Boolean(s.isBooked)
+        };
+      });
       PrepStorage.setSlots(backendSlots);
     }
 
-    if (bookingsRes.success && Array.isArray(bookingsRes.data) && bookingsRes.data.length > 0) {
-      let backendBookings = bookingsRes.data.map(b => ({
-        ...b,
-        id: b._id || b.id,
-        slotId: b.slotId?._id || b.slotId
-      }));
+    if (bookingsRes && bookingsRes.success && Array.isArray(bookingsRes.data)) {
+      let backendBookings = bookingsRes.data.map(b => {
+        let slotIdVal = b.slotId?._id ? String(b.slotId._id) : (b.slotId ? String(b.slotId) : "");
+        return {
+          ...b,
+          id: String(b._id || b.id),
+          _id: String(b._id || b.id),
+          slotId: slotIdVal,
+          status: b.status || "confirmed"
+        };
+      });
       PrepStorage.setBookings(backendBookings);
     }
   } catch (err) {
@@ -858,6 +877,12 @@ async function handleSignup(event) {
 
   setIdentityFromAccount();
   showAppScreen();
+
+  await Promise.all([
+    syncQuestionsFromBackend(),
+    syncSchedulerFromBackend()
+  ]);
+
   renderAll();
   showToast(`Account created for ${name}! Welcome to Prep Loop.`);
 }
@@ -1963,17 +1988,20 @@ function getGridCell(slotsAtTime, slotBookingsMap, currentUser, day, time) {
   }
 
   let offersHtml = slotsAtTime.map(function (slot) {
-    let booking = slotBookingsMap.get(slot.id);
+    let slotId = String(slot.id || slot._id);
+    let booking = slotBookingsMap.get(slotId) || (slot._id && slotBookingsMap.get(String(slot._id)));
     let isMySlot = currentUser && Scheduler.samePerson(slot.hostName, currentUser);
     let isInvolved = booking && currentUser && (isMySlot || Scheduler.samePerson(booking.requesterName, currentUser));
     let duration = slot.duration ? `${slot.duration}m` : "60m";
     let topicBadge = slot.topic ? `<span class="slot-topic-badge" title="${escapeHtml(slot.topic)}">${escapeHtml(slot.topic)}</span>` : "";
 
-    if (!booking && !isMySlot) {
-      return `<div class="slot-offer is-open"><div class="slot-cell-header"><span class="slot-host" title="Host: ${escapeHtml(slot.hostName)}">${escapeHtml(slot.hostName)}</span><span class="slot-duration-pill">${duration}</span></div>${topicBadge}<button class="slot-action-btn book-btn" type="button" data-book-slot="${slot.id}" aria-label="Book ${escapeHtml(slot.hostName)}’s slot at ${escapeHtml(displayTime)}">Book</button></div>`;
+    let isTaken = Boolean(booking || slot.isBooked);
+
+    if (!isTaken && !isMySlot) {
+      return `<div class="slot-offer is-open"><div class="slot-cell-header"><span class="slot-host" title="Host: ${escapeHtml(slot.hostName)}">${escapeHtml(slot.hostName)}</span><span class="slot-duration-pill">${duration}</span></div>${topicBadge}<button class="slot-action-btn book-btn" type="button" data-book-slot="${slotId}" aria-label="Book ${escapeHtml(slot.hostName)}’s slot at ${escapeHtml(displayTime)}">Book</button></div>`;
     }
-    if (!booking && isMySlot) {
-      return `<div class="slot-offer is-mine"><div class="slot-cell-header"><span class="slot-badge-mine">Your slot</span><span class="slot-duration-pill">${duration}</span></div>${topicBadge}<button class="slot-action-btn remove-btn" type="button" data-remove-slot="${slot.id}" title="Remove your open slot" aria-label="Remove slot">Remove</button></div>`;
+    if (!isTaken && isMySlot) {
+      return `<div class="slot-offer is-mine"><div class="slot-cell-header"><span class="slot-badge-mine">Your slot</span><span class="slot-duration-pill">${duration}</span></div>${topicBadge}<button class="slot-action-btn remove-btn" type="button" data-remove-slot="${slotId}" title="Remove your open slot" aria-label="Remove slot">Remove</button></div>`;
     }
     if (booking && isInvolved) {
       let otherPerson = isMySlot ? booking.requesterName : slot.hostName;
@@ -2016,7 +2044,9 @@ function renderSchedule() {
     for (let d = 0; d < Scheduler.DAYS.length; d++) {
       let day = Scheduler.DAYS[d];
       let matchingSlots = slots.filter(function (s) {
-        return s.day === day && Scheduler.normalizeTime(s.time) === time;
+        let sDay = String(s.day || "").trim();
+        let normSDay = sDay.length >= 3 ? (sDay.charAt(0).toUpperCase() + sDay.slice(1, 3).toLowerCase()) : sDay;
+        return (s.day === day || normSDay === day) && Scheduler.normalizeTime(s.time) === time;
       });
       gridHtml += getGridCell(matchingSlots, slotBookingsMap, currentUser, day, time);
     }
@@ -2147,7 +2177,7 @@ function renderSchedule() {
 }
 
 // Offers a new interview slot and validates against scheduling conflicts
-function onOfferSubmit(event) {
+async function onOfferSubmit(event) {
   event.preventDefault();
 
   let user = getCurrentUserName();
@@ -2182,38 +2212,54 @@ function onOfferSubmit(event) {
     return;
   }
 
+  let tempId = PrepStorage.uid();
   let newSlot = {
-    id: PrepStorage.uid(),
+    id: tempId,
+    _id: tempId,
     day: day,
     time: normalizedTime,
     duration: duration,
     topic: topic,
+    tag: topic || "DSA",
     hostName: user,
     createdAt: Date.now()
   };
 
   slots.push(newSlot);
   PrepStorage.setSlots(slots);
-  showToast(`Added open slot for ${day} at ${Scheduler.formatDisplayTime(normalizedTime)}!`);
+  form.elements["topic"].value = "";
+  renderAll();
 
   // Sync to MongoDB Backend
   if (typeof PrepAPI !== "undefined") {
-    PrepAPI.scheduler.createSlot({
-      hostName: user,
-      day: day,
-      time: normalizedTime,
-      tag: topic || "DSA",
-      link: ""
-    }).then(res => {
-      if (res.success && res.data && res.data._id) {
-        newSlot._id = res.data._id;
-        newSlot.id = res.data._id;
-      }
-    }).catch(err => console.warn("Could not save slot to backend:", err));
-  }
+    try {
+      let res = await PrepAPI.scheduler.createSlot({
+        hostName: user,
+        day: day,
+        time: normalizedTime,
+        duration: duration,
+        topic: topic,
+        tag: topic || "DSA",
+        link: ""
+      });
 
-  form.elements["topic"].value = "";
-  renderAll();
+      if (res && res.success && res.data && res.data._id) {
+        newSlot._id = String(res.data._id);
+        newSlot.id = String(res.data._id);
+        PrepStorage.setSlots(slots);
+        renderAll();
+        showToast(`Added open slot for ${day} at ${Scheduler.formatDisplayTime(normalizedTime)}!`);
+      } else {
+        console.warn("Backend slot creation response:", res);
+        showToast(`Added slot locally (${res?.error || "Offline"})`);
+      }
+    } catch (err) {
+      console.warn("Could not save slot to backend:", err);
+      showToast(`Added open slot for ${day} at ${Scheduler.formatDisplayTime(normalizedTime)}!`);
+    }
+  } else {
+    showToast(`Added open slot for ${day} at ${Scheduler.formatDisplayTime(normalizedTime)}!`);
+  }
 }
 
 // Removes an unbooked slot offered by the active user
@@ -2222,7 +2268,9 @@ function removeSlot(slotId) {
   let slots = PrepStorage.getSlots();
   let bookings = PrepStorage.getBookings();
 
-  let slotIndex = slots.findIndex(function (s) { return (s.id === slotId || s._id === slotId); });
+  let slotIndex = slots.findIndex(function (s) { 
+    return String(s.id) === String(slotId) || String(s._id) === String(slotId); 
+  });
   if (slotIndex === -1) {
     showToast("Slot not found.");
     return;
@@ -2235,7 +2283,8 @@ function removeSlot(slotId) {
   }
 
   let hasActiveBooking = bookings.some(function (b) {
-    return (b.slotId === slotId || b.slotId === targetSlot._id) && b.status !== "cancelled";
+    let bSlotId = String(b.slotId || "");
+    return (bSlotId === String(slotId) || bSlotId === String(targetSlot._id) || bSlotId === String(targetSlot.id)) && b.status !== "cancelled";
   });
 
   if (hasActiveBooking) {
@@ -2292,7 +2341,7 @@ function tryBooking(slotId) {
   let slots = PrepStorage.getSlots();
   let bookings = PrepStorage.getBookings();
   let targetSlot = slots.find(function (s) {
-    return s.id === slotId;
+    return String(s.id) === String(slotId) || String(s._id) === String(slotId);
   });
 
   if (!targetSlot) {
@@ -2305,7 +2354,8 @@ function tryBooking(slotId) {
     return;
   }
 
-  if (Scheduler.slotBooking(bookings, slotId)) {
+  let targetId = String(targetSlot.id || targetSlot._id);
+  if (targetSlot.isBooked || Scheduler.slotBooking(bookings, targetId) || (targetSlot._id && Scheduler.slotBooking(bookings, String(targetSlot._id)))) {
     showToast("That slot has already been booked.");
     return;
   }
@@ -2317,20 +2367,28 @@ function tryBooking(slotId) {
 
   let newBooking = {
     id: PrepStorage.uid(),
-    slotId: slotId,
+    slotId: targetSlot._id || targetSlot.id,
     requesterName: user,
     status: "confirmed",
     feedback: null
   };
 
+  targetSlot.isBooked = true;
   bookings.push(newBooking);
   PrepStorage.setBookings(bookings);
+  PrepStorage.setSlots(slots);
   showToast(`Booked ${targetSlot.hostName}’s ${targetSlot.day} ${Scheduler.formatDisplayTime(targetSlot.time)} session.`);
 
   // Sync to MongoDB Backend
   if (typeof PrepAPI !== "undefined" && targetSlot) {
     let mongoSlotId = targetSlot._id || targetSlot.id;
-    PrepAPI.scheduler.bookSlot(mongoSlotId, user).catch(err => console.warn("Could not sync booking to backend:", err));
+    PrepAPI.scheduler.bookSlot(mongoSlotId, user).then(res => {
+      if (res && res.success && res.data && res.data._id) {
+        newBooking._id = String(res.data._id);
+        newBooking.id = String(res.data._id);
+        PrepStorage.setBookings(bookings);
+      }
+    }).catch(err => console.warn("Could not sync booking to backend:", err));
   }
 
   renderAll();
@@ -2482,6 +2540,11 @@ function switchTab(tabName) {
       panel.hidden = true;
     }
   });
+
+  // Always refresh slots live from Atlas when opening the schedule panel
+  if (tabName === "schedule") {
+    syncSchedulerFromBackend().then(() => renderSchedule());
+  }
 }
 
 // Re-renders all active tab views and reactive widgets
@@ -2522,6 +2585,21 @@ function initialize() {
       }
     });
   });
+
+  let refreshScheduleBtn = document.getElementById("refresh-schedule-btn");
+  if (refreshScheduleBtn) {
+    refreshScheduleBtn.addEventListener("click", function () {
+      refreshScheduleBtn.disabled = true;
+      refreshScheduleBtn.textContent = "↻ Refreshing...";
+      syncSchedulerFromBackend().then(() => {
+        renderSchedule();
+        showToast("Mock interview slots refreshed live from database!");
+      }).finally(() => {
+        refreshScheduleBtn.disabled = false;
+        refreshScheduleBtn.textContent = "↻ Refresh slots";
+      });
+    });
+  }
 
   let navTabs = document.querySelectorAll(".tab");
   navTabs.forEach(function (tab) {
@@ -2912,6 +2990,9 @@ function initialize() {
     updateBackendStatusIndicator();
     setInterval(updateBackendStatusIndicator, 15000);
   }
+
+  // Pre-load public scheduler slots from Atlas
+  syncSchedulerFromBackend().then(() => renderSchedule());
 
   // Pure Atlas Authentication: validate existing JWT Bearer token
   if (typeof PrepAPI !== "undefined" && PrepAPI.getToken()) {
