@@ -50,9 +50,14 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    if (!password || password.length < 4) {
+      return res.status(400).json({ message: 'Password is required and must be at least 4 characters long' });
+    }
+
     const userData = {
       name,
       email,
+      password,
       university: university || '',
       course: course || '',
       year: year || '',
@@ -63,9 +68,6 @@ const registerUser = async (req, res) => {
       googleId: googleId || '',
       avatar: avatar || ''
     };
-    if (password && password.length >= 4) {
-      userData.password = password;
-    }
 
     const user = await User.create(userData);
 
@@ -143,54 +145,82 @@ const googleAuth = async (req, res) => {
     let user = await User.findOne({ email });
 
     if (user) {
-      // Update details and link Google status
+      // Update details and link Google status for existing user
       user.isGoogle = true;
       if (name && !user.name) user.name = name;
       if (!user.googleId && googleId) user.googleId = googleId;
       if (avatar) user.avatar = avatar;
-      if (university) user.university = university;
-      if (course) user.course = course;
-      if (year) user.year = year;
-      if (leetcode) user.leetcode = leetcode;
-      if (gfg) user.gfg = gfg;
-      if (github) user.github = github;
+      if (university && !user.university) user.university = university;
+      if (course && !user.course) user.course = course;
+      if (year && !user.year) user.year = year;
+      if (leetcode && !user.leetcode) user.leetcode = leetcode;
+      if (gfg && !user.gfg) user.gfg = gfg;
+      if (github && !user.github) user.github = github;
       if (password && password.length >= 4) user.password = password;
       await user.save();
-    } else {
-      // Create new Google-authenticated user
+
+      return res.json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isGoogle: user.isGoogle,
+        googleId: user.googleId,
+        avatar: user.avatar,
+        university: user.university,
+        course: user.course,
+        year: user.year,
+        leetcode: user.leetcode,
+        gfg: user.gfg,
+        github: user.github,
+        token: generateToken(user._id)
+      });
+    }
+
+    // If new user and user has provided password and academic info (completing registration)
+    if (password && password.length >= 4 && university && course && year) {
       const userData = {
         name,
         email,
+        password,
         googleId: googleId || '',
         avatar: avatar || '',
         isGoogle: true,
-        university: university || '',
-        course: course || '',
-        year: year || '',
+        university,
+        course,
+        year,
         leetcode: leetcode || '',
         gfg: gfg || '',
         github: github || ''
       };
-      if (password && password.length >= 4) {
-        userData.password = password;
-      }
       user = await User.create(userData);
+
+      return res.status(201).json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isGoogle: user.isGoogle,
+        googleId: user.googleId,
+        avatar: user.avatar,
+        university: user.university,
+        course: user.course,
+        year: user.year,
+        leetcode: user.leetcode,
+        gfg: user.gfg,
+        github: user.github,
+        token: generateToken(user._id)
+      });
     }
 
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      isGoogle: user.isGoogle,
-      googleId: user.googleId,
-      avatar: user.avatar,
-      university: user.university,
-      course: user.course,
-      year: user.year,
-      leetcode: user.leetcode,
-      gfg: user.gfg,
-      github: user.github,
-      token: generateToken(user._id)
+    // New Google user who has not registered yet:
+    // Do NOT automatically verify or create user without a password.
+    // Return isNew: true so user chooses their own password on signup form.
+    return res.json({
+      isNew: true,
+      name: name || '',
+      email,
+      googleId: googleId || '',
+      avatar: avatar || '',
+      message: 'Google details fetched. Please choose your password to complete registration.'
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

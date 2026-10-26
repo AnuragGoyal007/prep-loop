@@ -535,7 +535,7 @@ async function processGoogleUser(googleData) {
     return;
   }
 
-  showToast("Authenticating with Google on MongoDB Atlas...");
+  showToast("Connecting with Google account...");
 
   try {
     let apiRes = await PrepAPI.auth.googleAuth({
@@ -545,7 +545,8 @@ async function processGoogleUser(googleData) {
       avatar: googleData.avatar || ""
     });
 
-    if (apiRes.success && apiRes.data) {
+    // If this is an existing user who already registered and completed their profile:
+    if (apiRes.success && apiRes.data && !apiRes.data.isNew && apiRes.data._id && apiRes.data.university) {
       let user = {
         id: apiRes.data._id,
         name: apiRes.data.name || cleanName,
@@ -560,44 +561,6 @@ async function processGoogleUser(googleData) {
         googleId: apiRes.data.googleId || googleData.googleId || "",
         avatar: apiRes.data.avatar || googleData.avatar || ""
       };
-
-      // If user lacks academic profile info, guide them to complete signup
-      if (!user.university || !user.course || !user.year) {
-        googlePendingAuth = {
-          name: user.name,
-          email: user.email,
-          avatar: user.avatar,
-          googleId: user.googleId
-        };
-        switchAuthMode("signup");
-        let signupForm = document.getElementById("signup-form");
-        if (signupForm) {
-          signupForm.elements["name"].value = user.name;
-          signupForm.elements["email"].value = user.email;
-          signupForm.elements["name"].readOnly = true;
-          signupForm.elements["email"].readOnly = true;
-          // Ensure password is NOT entered by default when fetching details from Google OAuth
-          signupForm.elements["password"].value = "";
-          signupForm.elements["password"].required = false;
-          let pwdInput = signupForm.elements["password"];
-          if (pwdInput) {
-            pwdInput.placeholder = "Optional (already verified via Google)";
-          }
-          let verifiedBanner = document.getElementById("google-verified-banner");
-          let verifiedEmailElem = document.getElementById("google-verified-email");
-          if (verifiedBanner && verifiedEmailElem) {
-            verifiedEmailElem.textContent = `${cleanEmail} (Verified via Google)`;
-            verifiedBanner.hidden = false;
-          }
-          // Hide top Google buttons and divider since user is already Google-verified
-          let googleSection = document.getElementById("google-auth-section");
-          let authDivider = document.getElementById("auth-divider");
-          if (googleSection) googleSection.hidden = true;
-          if (authDivider) authDivider.hidden = true;
-        }
-        showToast("Google verified! Please fill in your university and branch details.");
-        return;
-      }
 
       PrepStorage.setCurrentUser(user);
       await Promise.all([
@@ -619,11 +582,52 @@ async function processGoogleUser(googleData) {
       githubUsername = user.github || "";
 
       renderAll();
-      showToast(`Welcome back, ${user.name || "there"}! (Verified via Google)`);
+      showToast(`Welcome back, ${user.name || "there"}! Logged in via Google.`);
       return;
-    } else {
-      showToast(apiRes.error || "Google authentication failed. Please try again.");
     }
+
+    // New Google user: do NOT verify or register automatically via Google.
+    // User will choose their own password.
+    googlePendingAuth = {
+      name: cleanName,
+      email: cleanEmail,
+      avatar: googleData.avatar || (apiRes.data && apiRes.data.avatar) || "",
+      googleId: googleData.googleId || (apiRes.data && apiRes.data.googleId) || ""
+    };
+
+    switchAuthMode("signup");
+    let signupForm = document.getElementById("signup-form");
+    if (signupForm) {
+      signupForm.elements["name"].value = cleanName;
+      signupForm.elements["email"].value = cleanEmail;
+      signupForm.elements["name"].readOnly = true;
+      signupForm.elements["email"].readOnly = true;
+
+      // Leave the password field completely blank - user chooses their own password
+      signupForm.elements["password"].value = "";
+      signupForm.elements["password"].required = true;
+      let pwdInput = signupForm.elements["password"];
+      if (pwdInput) {
+        pwdInput.placeholder = "Choose a password (min 4 characters)";
+        pwdInput.focus();
+      }
+
+      let verifiedBanner = document.getElementById("google-verified-banner");
+      let verifiedEmailElem = document.getElementById("google-verified-email");
+      if (verifiedBanner && verifiedEmailElem) {
+        verifiedEmailElem.textContent = `${cleanEmail} (Connected via Google)`;
+        verifiedBanner.hidden = false;
+      }
+
+      // Hide top Google buttons and divider so redundant buttons do not appear
+      let googleSection = document.getElementById("google-auth-section");
+      let authDivider = document.getElementById("auth-divider");
+      if (googleSection) googleSection.hidden = true;
+      if (authDivider) authDivider.hidden = true;
+    }
+
+    showToast("Google account connected. Please choose your password to complete signup.");
+    return;
   } catch (err) {
     showToast("Google sign-in error: " + err.message);
   }
@@ -794,30 +798,21 @@ async function handleSignup(event) {
   let gfg = form.elements["gfg"] ? form.elements["gfg"].value.trim() : "";
   let github = form.elements["github"] ? form.elements["github"].value.trim().replace(/^@/, "") : "";
 
-  if (!googlePendingAuth) {
-    if (!name || !email || !password || !university || !course || !year) {
-      showToast("Please fill in all mandatory fields (Name, Email, Password, University, Course, Year).");
-      return;
-    }
-    if (password.length < 4) {
-      showToast("Password must be at least 4 characters long.");
-      return;
-    }
-  } else {
-    // For Google verified users, academic fields are mandatory, but password is NOT entered by default and is optional
-    if (!name || !email || !university || !course || !year) {
-      showToast("Please fill in all mandatory academic fields (University, Course, Year).");
-      return;
-    }
-    if (password && password.length < 4) {
-      showToast("If providing a password, it must be at least 4 characters long.");
-      return;
-    }
+  // All users must choose and enter their own password
+  if (!name || !email || !password || !university || !course || !year) {
+    showToast("Please fill in all mandatory fields (Name, Email, Password, University, Course, Year).");
+    return;
+  }
+
+  if (password.length < 4) {
+    showToast("Password must be at least 4 characters long.");
+    return;
   }
 
   let newUser = {
     name: name,
     email: email,
+    password: password,
     university: university,
     course: course,
     year: year,
@@ -825,10 +820,6 @@ async function handleSignup(event) {
     gfg: gfg,
     github: github
   };
-
-  if (password && password.length >= 4) {
-    newUser.password = password;
-  }
 
   if (googlePendingAuth) {
     newUser.isGoogle = true;
