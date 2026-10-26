@@ -641,7 +641,11 @@ async function syncSchedulerFromBackend() {
       PrepStorage.setBookings(backendBookings);
     }
   } catch (err) {
-    console.warn("Scheduler backend sync error:", e// Live Backend Health Indicator update
+    console.warn("Scheduler backend sync error:", err);
+  }
+}
+
+// Live Backend Health Indicator update
 async function updateBackendStatusIndicator() {
   if (typeof PrepAPI === "undefined") return;
   try {
