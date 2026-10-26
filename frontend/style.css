@@ -584,3 +584,37 @@ body.theme-dark .backend-status-badge.offline {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.85); }
 }
+
+.schedule-heading-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.refresh-slots-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--teal);
+  background: var(--teal-soft);
+  border: 1px solid var(--teal);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.refresh-slots-btn:hover {
+  background: var(--teal);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.refresh-slots-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
