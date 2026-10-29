@@ -238,4 +238,60 @@ const getMe = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser, googleAuth, getMe };
+// @desc    Update user profile (coding handles, university, year)
+// @route   PUT /api/auth/profile
+const updateProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const { name, university, course, year, leetcode, gfg, github } = req.body;
+    if (name) user.name = name;
+    if (university !== undefined) user.university = university;
+    if (course !== undefined) user.course = course;
+    if (year !== undefined) user.year = year;
+    if (leetcode !== undefined) user.leetcode = leetcode;
+    if (gfg !== undefined) user.gfg = gfg;
+    if (github !== undefined) user.github = github;
+
+    const updatedUser = await user.save();
+    res.json({
+      _id: updatedUser._id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      leetcode: updatedUser.leetcode,
+      gfg: updatedUser.gfg,
+      github: updatedUser.github
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Secure password change
+// @route   PUT /api/auth/password
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || newPassword.length < 4) {
+      return res.status(400).json({ message: 'New password must be at least 4 characters long' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Verify current password
+    if (user.password && !(await user.matchPassword(currentPassword))) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    user.password = newPassword;
+    await user.save(); // Triggers the bcrypt hashing pre-save hook in User.js
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { registerUser, loginUser, googleAuth, getMe,updateProfile,changePassword};
