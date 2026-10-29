@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { getQuestions, addQuestion, updateQuestion, deleteQuestion } = require('../controllers/questionController');
+const { getQuestions, addQuestion, updateQuestion, deleteQuestion ,getDueQuestions,
+  getQuestionStats,
+  getQuestionById,
+  resetQuestionSM2} = require('../controllers/questionController');
 const { protect } = require('../middleware/authMiddleware');
 
 router.route('/')
@@ -9,6 +12,14 @@ router.route('/')
 
 router.route('/:id')
   .put(protect, updateQuestion)
-  .delete(protect, deleteQuestion);
+  .delete(protect, deleteQuestion)
+  .get(protect, getQuestionById);
+
+router.post('/:id/reset', protect, resetQuestionSM2);
+
+router.get('/due', protect, getDueQuestions);
+router.get('/stats', protect, getQuestionStats);
 
 module.exports = router;
+
+
