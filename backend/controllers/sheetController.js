@@ -32,4 +32,38 @@ const getTopicById = async (req, res) => {
   }
 };
 
-module.exports = { getSheetTopics, getTopicById };
+
+// In-memory or User document bookmark toggle
+// @desc    Toggle bookmark status for a core sheet topic
+// @route   POST /api/sheets/bookmark/:topicId
+const toggleTopicBookmark = async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Initialize bookmarkedTopics array if not present
+    if (!user.bookmarkedTopics) user.bookmarkedTopics = [];
+
+    const index = user.bookmarkedTopics.indexOf(topicId);
+    let isBookmarked = false;
+
+    if (index > -1) {
+      user.bookmarkedTopics.splice(index, 1); // Remove bookmark
+    } else {
+      user.bookmarkedTopics.push(topicId);    // Add bookmark
+      isBookmarked = true;
+    }
+
+    await user.save();
+    res.json({
+      topicId,
+      isBookmarked,
+      totalBookmarks: user.bookmarkedTopics.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { getSheetTopics, getTopicById,toggleTopicBookmark };
