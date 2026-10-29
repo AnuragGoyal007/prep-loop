@@ -177,8 +177,35 @@ const resetQuestionSM2 = async (req, res) => {
   }
 };
 
+// @desc    Get daily attempt counts for 365-day activity heatmap
+// @route   GET /api/questions/activity
+const getActivityHeatmap = async (req, res) => {
+  try {
+    const activity = await Question.aggregate([
+      { $match: { user: req.user._id } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+          totalMinutes: { $sum: "$timeTaken" }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Format as a map: { "2026-10-25": { count: 3, minutes: 45 }, ... }
+    const heatmap = {};
+    activity.forEach(item => {
+      heatmap[item._id] = { count: item.count, minutes: item.totalMinutes };
+    });
+
+    res.json(heatmap);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
 
 module.exports = { getQuestions, addQuestion, updateQuestion, deleteQuestion ,getDueQuestions,
   getQuestionStats,
   getQuestionById,
-  resetQuestionSM2};
+  resetQuestionSM2,getActivityHeatmap};

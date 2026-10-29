@@ -3,7 +3,7 @@ const router = express.Router();
 const { getQuestions, addQuestion, updateQuestion, deleteQuestion ,getDueQuestions,
   getQuestionStats,
   getQuestionById,
-  resetQuestionSM2} = require('../controllers/questionController');
+  resetQuestionSM2,getActivityHeatmap} = require('../controllers/questionController');
 const { protect } = require('../middleware/authMiddleware');
 
 router.route('/')
@@ -19,6 +19,9 @@ router.post('/:id/reset', protect, resetQuestionSM2);
 
 router.get('/due', protect, getDueQuestions);
 router.get('/stats', protect, getQuestionStats);
+
+
+router.get('/activity', protect, getActivityHeatmap);
 
 module.exports = router;
 
